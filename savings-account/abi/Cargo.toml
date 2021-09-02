@@ -1,11 +1,11 @@
 [package]
-name = "ping-pong-abi"
+name = "savings-account-abi"
 version = "0.0.0"
-authors = [ "Bruda Claudiu-Marcel <claudiu725@yahoo.com>",]
+authors = [ "Dorin Iancu <dorin.iancu@elrond.com>",]
 edition = "2018"
 publish = false
 
-[dependencies.ping-pong]
+[dependencies.savings-account]
 path = ".."
 
 [dependencies.elrond-wasm]
