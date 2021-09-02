@@ -2,10 +2,11 @@
 
 elrond_wasm::imports!();
 
+mod borrow;
 mod price_aggregator;
 
 #[elrond_wasm::contract]
-pub trait SavingsAccount: price_aggregator::PriceAggregatorModule {
+pub trait SavingsAccount: borrow::BorrowModule + price_aggregator::PriceAggregatorModule {
     #[init]
     fn init(&self) {}
 
