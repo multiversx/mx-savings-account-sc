@@ -2,14 +2,17 @@
 
 elrond_wasm::imports!();
 
-mod borrow;
+mod math;
 mod pool_params;
 mod price_aggregator;
+mod tokens;
 
 use pool_params::*;
 
 #[elrond_wasm::contract]
-pub trait SavingsAccount: borrow::BorrowModule + price_aggregator::PriceAggregatorModule {
+pub trait SavingsAccount:
+    math::MathModule + price_aggregator::PriceAggregatorModule + tokens::TokensModule
+{
     #[init]
     fn init(
         &self,
@@ -53,6 +56,31 @@ pub trait SavingsAccount: borrow::BorrowModule + price_aggregator::PriceAggregat
         Ok(())
     }
 
+    // endpoints
+
+    #[payable("*")]
+    #[endpoint]
+    fn deposit(
+        &self,
+        #[payment_token] payment_token: TokenIdentifier,
+        #[payment_amount] _payment_amount: Self::BigUint,
+    ) -> SCResult<()> {
+        self.require_lend_token_issued()?;
+
+        let lend_token_id = self.lend_token_id().get();
+        self.require_local_roles_set(&lend_token_id)?;
+
+        let stablecoin_token_id = self.stablecoin_token_id().get();
+        require!(
+            payment_token == stablecoin_token_id,
+            "May only deposit stablecoins"
+        );
+
+        // let current_timestamp = self.blockchain().get_block_timestamp();
+
+        Ok(())
+    }
+
     // private
 
     fn get_egld_price_in_stablecoin(&self) -> SCResult<Self::BigUint> {
@@ -85,4 +113,10 @@ pub trait SavingsAccount: borrow::BorrowModule + price_aggregator::PriceAggregat
         &self,
         token_id: &TokenIdentifier,
     ) -> SingleValueMapper<Self::Storage, Self::BigUint>;
+
+    #[storage_mapper("lendTimestamp")]
+    fn lend_timestamp(&self, sft_nonce: u64) -> SingleValueMapper<Self::Storage, u64>;
+
+    #[storage_mapper("borrowTimestamp")]
+    fn borrow_timestamp(&self, sft_nonce: u64) -> SingleValueMapper<Self::Storage, u64>;
 }

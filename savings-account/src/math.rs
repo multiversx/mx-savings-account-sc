@@ -4,7 +4,7 @@ const BASE_PRECISION: u32 = 1000000000;
 const SECONDS_IN_YEAR: u32 = 31556926;
 
 #[elrond_wasm::module]
-pub trait BorrowModule {
+pub trait MathModule {
     fn compute_borrow_rate(
         &self,
         r_base: &Self::BigUint,
@@ -52,12 +52,15 @@ pub trait BorrowModule {
     fn compute_debt(
         &self,
         amount: &Self::BigUint,
-        time_diff: &Self::BigUint,
+        borrow_timestamp: u64,
         borrow_rate: &Self::BigUint,
     ) -> Self::BigUint {
+        let current_time = self.blockchain().get_block_timestamp();
+        let time_diff = current_time - borrow_timestamp;
+
         let bp = Self::BigUint::from(BASE_PRECISION);
         let secs_year = Self::BigUint::from(SECONDS_IN_YEAR);
-        let time_unit_percentage = (time_diff * &bp) / secs_year;
+        let time_unit_percentage = (&time_diff.into() * &bp) / secs_year;
         let debt_percetange = &(&time_unit_percentage * borrow_rate) / &bp;
 
         (&debt_percetange * amount) / bp
@@ -66,12 +69,15 @@ pub trait BorrowModule {
     fn compute_withdrawal_amount(
         &self,
         amount: &Self::BigUint,
-        time_diff: &Self::BigUint,
+        deposit_timestamp: u64,
         deposit_rate: &Self::BigUint,
     ) -> Self::BigUint {
+        let current_time = self.blockchain().get_block_timestamp();
+        let time_diff = current_time - deposit_timestamp;
+
         let bp = Self::BigUint::from(BASE_PRECISION);
         let secs_year = Self::BigUint::from(SECONDS_IN_YEAR);
-        let percentage = (time_diff * deposit_rate) / secs_year;
+        let percentage = (&time_diff.into() * deposit_rate) / secs_year;
 
         amount + &((&percentage * amount) / bp)
     }

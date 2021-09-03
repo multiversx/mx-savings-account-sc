@@ -1,7 +1,5 @@
 elrond_wasm::imports!();
 
-const TICKER_SEPARATOR: u8 = b'-';
-
 pub type AggregatorResultAsMultiResult<BigUint> =
     MultiResult5<u32, BoxedBytes, BoxedBytes, BigUint, u8>;
 
@@ -44,13 +42,12 @@ impl<BigUint: BigUintApi> From<AggregatorResultAsMultiResult<BigUint>>
 }
 
 #[elrond_wasm::module]
-pub trait PriceAggregatorModule {
+pub trait PriceAggregatorModule: crate::tokens::TokensModule {
     #[only_owner]
     #[endpoint(setPriceAggregatorAddress)]
     fn set_price_aggregator_address(&self, address: Address) -> SCResult<()> {
         require!(
-            self.blockchain()
-                .is_smart_contract(&address),
+            self.blockchain().is_smart_contract(&address),
             "Invalid price aggregator address"
         );
 
@@ -69,8 +66,8 @@ pub trait PriceAggregatorModule {
             return None;
         }
 
-        let from_ticker = self.get_token_ticker(from);
-        let to_ticker = self.get_token_ticker(to);
+        let from_ticker = self.get_token_ticker(&from);
+        let to_ticker = self.get_token_ticker(&to);
 
         let result: OptionalResult<AggregatorResultAsMultiResult<Self::BigUint>> = self
             .aggregator_proxy(price_aggregator_address)
@@ -80,16 +77,6 @@ pub trait PriceAggregatorModule {
         result
             .into_option()
             .map(|multi_result| AggregatorResult::from(multi_result).price)
-    }
-
-    fn get_token_ticker(&self, token_id: TokenIdentifier) -> BoxedBytes {
-        for (i, char) in token_id.as_esdt_identifier().iter().enumerate() {
-            if *char == TICKER_SEPARATOR {
-                return token_id.as_esdt_identifier()[..i].into();
-            }
-        }
-
-        token_id.into_boxed_bytes()
     }
 
     #[proxy]
