@@ -46,9 +46,16 @@ impl<BigUint: BigUintApi> From<AggregatorResultAsMultiResult<BigUint>>
 #[elrond_wasm::module]
 pub trait PriceAggregatorModule {
     #[only_owner]
-    #[endpoint(setAggregatorAddress)]
-    fn set_aggregator_address(&self, address: Address) -> SCResult<()> {
-        self.aggregator_address().set(&address);
+    #[endpoint(setPriceAggregatorAddress)]
+    fn set_price_aggregator_address(&self, address: Address) -> SCResult<()> {
+        require!(
+            self.blockchain()
+                .is_smart_contract(&address),
+            "Invalid price aggregator address"
+        );
+
+        self.price_aggregator_address().set(&address);
+
         Ok(())
     }
 
@@ -57,8 +64,8 @@ pub trait PriceAggregatorModule {
         from: TokenIdentifier,
         to: TokenIdentifier,
     ) -> Option<Self::BigUint> {
-        let aggregator_address = self.aggregator_address().get();
-        if aggregator_address.is_zero() {
+        let price_aggregator_address = self.price_aggregator_address().get();
+        if price_aggregator_address.is_zero() {
             return None;
         }
 
@@ -66,7 +73,7 @@ pub trait PriceAggregatorModule {
         let to_ticker = self.get_token_ticker(to);
 
         let result: OptionalResult<AggregatorResultAsMultiResult<Self::BigUint>> = self
-            .aggregator_proxy(aggregator_address)
+            .aggregator_proxy(price_aggregator_address)
             .latest_price_feed_optional(from_ticker, to_ticker)
             .execute_on_dest_context();
 
@@ -89,6 +96,6 @@ pub trait PriceAggregatorModule {
     fn aggregator_proxy(&self, address: Address) -> price_aggregator_proxy::Proxy<Self::SendApi>;
 
     #[view(getAggregatorAddress)]
-    #[storage_mapper("aggregator_address")]
-    fn aggregator_address(&self) -> SingleValueMapper<Self::Storage, Address>;
+    #[storage_mapper("priceAggregatorAddress")]
+    fn price_aggregator_address(&self) -> SingleValueMapper<Self::Storage, Address>;
 }
