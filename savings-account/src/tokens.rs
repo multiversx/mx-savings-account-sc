@@ -1,3 +1,5 @@
+use elrond_wasm::elrond_codec::TopEncode;
+
 elrond_wasm::imports!();
 
 const TICKER_SEPARATOR: u8 = b'-';
@@ -97,6 +99,27 @@ pub trait TokensModule {
         }
 
         token_id.as_name().into()
+    }
+
+    fn create_tokens<T: TopEncode>(
+        &self,
+        token_id: &TokenIdentifier,
+        amount: &Self::BigUint,
+        attributes: &T,
+    ) -> SCResult<u64> {
+        self.require_local_roles_set(token_id)?;
+
+        let sft_nonce = self.send().esdt_nft_create(
+            token_id,
+            amount,
+            &BoxedBytes::empty(),
+            &Self::BigUint::zero(),
+            &BoxedBytes::empty(),
+            attributes,
+            &[],
+        );
+
+        Ok(sft_nonce)
     }
 
     fn require_lend_token_issued(&self) -> SCResult<()> {

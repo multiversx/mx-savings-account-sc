@@ -13,6 +13,7 @@ use pool_params::*;
 pub trait SavingsAccount:
     math::MathModule + price_aggregator::PriceAggregatorModule + tokens::TokensModule
 {
+    #[allow(clippy::too_many_arguments)]
     #[init]
     fn init(
         &self,
@@ -63,12 +64,9 @@ pub trait SavingsAccount:
     fn deposit(
         &self,
         #[payment_token] payment_token: TokenIdentifier,
-        #[payment_amount] _payment_amount: Self::BigUint,
+        #[payment_amount] payment_amount: Self::BigUint,
     ) -> SCResult<()> {
         self.require_lend_token_issued()?;
-
-        let lend_token_id = self.lend_token_id().get();
-        self.require_local_roles_set(&lend_token_id)?;
 
         let stablecoin_token_id = self.stablecoin_token_id().get();
         require!(
@@ -76,7 +74,18 @@ pub trait SavingsAccount:
             "May only deposit stablecoins"
         );
 
-        // let current_timestamp = self.blockchain().get_block_timestamp();
+        let caller = self.blockchain().get_caller();
+        let current_timestamp = self.blockchain().get_block_timestamp();
+
+        let lend_token_id = self.lend_token_id().get();
+        let sft_nonce = self.create_tokens(&lend_token_id, &payment_amount, &())?;
+
+        self.reserves(&stablecoin_token_id)
+            .update(|reserves| *reserves += &payment_amount);
+        self.lend_timestamp(sft_nonce).set(&current_timestamp);
+
+        self.send()
+            .direct(&caller, &lend_token_id, sft_nonce, &payment_amount, &[]);
 
         Ok(())
     }
@@ -107,9 +116,9 @@ pub trait SavingsAccount:
     #[storage_mapper("borrowedAmount")]
     fn borrowed_amount(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
 
-    #[view(getPoolReserves)]
-    #[storage_mapper("poolReserves")]
-    fn pool_reserves(
+    #[view(getReserves)]
+    #[storage_mapper("reserves")]
+    fn reserves(
         &self,
         token_id: &TokenIdentifier,
     ) -> SingleValueMapper<Self::Storage, Self::BigUint>;
