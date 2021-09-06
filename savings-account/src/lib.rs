@@ -227,11 +227,11 @@ pub trait SavingsAccount:
             */
         }
 
+        self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount)?;
+
         let caller = self.blockchain().get_caller();
         self.send()
             .direct(&caller, &stablecoin_token_id, 0, &withdraw_amount, &[]);
-
-        self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount)?;
 
         Ok(())
     }
