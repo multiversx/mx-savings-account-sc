@@ -122,6 +122,19 @@ pub trait TokensModule {
         Ok(sft_nonce)
     }
 
+    fn burn_tokens(
+        &self,
+        token_id: &TokenIdentifier,
+        nonce: u64,
+        amount: &Self::BigUint,
+    ) -> SCResult<()> {
+        self.require_local_roles_set(token_id)?;
+
+        self.send().esdt_local_burn(token_id, nonce, amount);
+
+        Ok(())
+    }
+
     fn require_lend_token_issued(&self) -> SCResult<()> {
         require!(!self.lend_token_id().is_empty(), "Lend token not issued");
         Ok(())
@@ -182,6 +195,14 @@ pub trait TokensModule {
     }
 
     // storage
+
+    #[view(getStablecoinTokenId)]
+    #[storage_mapper("stablecoinTokenId")]
+    fn stablecoin_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
+
+    #[view(getLiquidStakingTokenId)]
+    #[storage_mapper("liquidStakingTokenId")]
+    fn liquid_staking_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
 
     #[view(getLendTokenId)]
     #[storage_mapper("lendTokenId")]

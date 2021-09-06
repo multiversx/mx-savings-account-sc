@@ -78,19 +78,17 @@ pub trait SavingsAccount:
             "May only deposit stablecoins"
         );
 
-        let caller = self.blockchain().get_caller();
-        let current_timestamp = self.blockchain().get_block_timestamp();
-
         let lend_token_id = self.lend_token_id().get();
         let sft_nonce = self.create_tokens(&lend_token_id, &payment_amount, &())?;
 
         self.reserves(&stablecoin_token_id)
             .update(|reserves| *reserves += &payment_amount);
         self.lend_metadata(sft_nonce).set(&LendMetadata {
-            timestamp: current_timestamp,
+            timestamp: self.blockchain().get_block_timestamp(),
             amount_in_circulation: payment_amount.clone(),
         });
 
+        let caller = self.blockchain().get_caller();
         self.send()
             .direct(&caller, &lend_token_id, sft_nonce, &payment_amount, &[]);
 
@@ -106,12 +104,6 @@ pub trait SavingsAccount:
         #[payment_amount] payment_amount: Self::BigUint,
     ) -> SCResult<()> {
         self.require_borrow_token_issued()?;
-
-        let caller = self.blockchain().get_caller();
-        require!(
-            !self.blockchain().is_smart_contract(&caller),
-            "Caller may not be a smart contract"
-        );
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         require!(
@@ -156,7 +148,14 @@ pub trait SavingsAccount:
                 liquid_staking_token_nonce: payment_nonce,
                 timestamp: self.blockchain().get_block_timestamp(),
             });
+        self.borrowed_amount()
+            .update(|total| *total += &borrow_value);
+        self.reserves(&stablecoin_token_id)
+            .update(|reserves| *reserves -= &borrow_value);
 
+        self.staking_positions().push_back(payment_nonce);
+
+        let caller = self.blockchain().get_caller();
         self.send().direct(
             &caller,
             &borrow_token_id,
@@ -166,6 +165,73 @@ pub trait SavingsAccount:
         );
         self.send()
             .direct(&caller, &stablecoin_token_id, 0, &borrow_value, &[]);
+
+        Ok(())
+    }
+
+    #[payable("*")]
+    #[endpoint(withdraw)]
+    fn withdraw(
+        &self,
+        #[payment_token] payment_token: TokenIdentifier,
+        #[payment_nonce] payment_nonce: u64,
+        #[payment_amount] payment_amount: Self::BigUint,
+    ) -> SCResult<()> {
+        self.require_lend_token_issued()?;
+
+        let stablecoin_token_id = self.stablecoin_token_id().get();
+        let lend_token_id = self.lend_token_id().get();
+        require!(
+            payment_token == lend_token_id,
+            "May only pay with lend tokens"
+        );
+
+        let mut lend_metadata = self.lend_metadata(payment_nonce).get();
+        lend_metadata.amount_in_circulation -= &payment_amount;
+
+        if lend_metadata.amount_in_circulation == 0 {
+            self.lend_metadata(payment_nonce).clear();
+        } else {
+            self.lend_metadata(payment_nonce).set(&lend_metadata);
+        }
+
+        let borrowed_amount = self.borrowed_amount().get();
+        let stablecoin_reserves = self.reserves(&stablecoin_token_id).get();
+        let current_utilisation =
+            self.compute_capital_utilisation(&borrowed_amount, &stablecoin_reserves);
+
+        let pool_params = self.pool_params().get();
+        let borrow_rate = self.compute_borrow_rate(
+            &pool_params.base_borrow_rate,
+            &pool_params.borrow_rate_under_opt_factor,
+            &pool_params.borrow_rate_over_opt_factor,
+            &pool_params.optimal_utilisation,
+            &current_utilisation,
+        );
+        let deposit_rate = self.compute_deposit_rate(
+            &current_utilisation,
+            &borrow_rate,
+            &pool_params.reserve_factor,
+        );
+
+        let withdraw_amount =
+            self.compute_withdrawal_amount(&payment_amount, lend_metadata.timestamp, &deposit_rate);
+        let sc_stablecoin_balance = self.blockchain().get_sc_balance(&stablecoin_token_id, 0);
+
+        if withdraw_amount > sc_stablecoin_balance {
+            /* TODO:
+                Try convert EGLD to X worth of stablecoins (where X =  withdraw_amount - sc_balance)
+                (EGLD gained through claiming staking rewards)
+                Through DEX contracts?
+                Throw an error if even that wouldn't be enough to cover for the costs
+            */
+        }
+
+        let caller = self.blockchain().get_caller();
+        self.send()
+            .direct(&caller, &stablecoin_token_id, 0, &withdraw_amount, &[]);
+
+        self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount)?;
 
         Ok(())
     }
@@ -180,14 +246,6 @@ pub trait SavingsAccount:
     }
 
     // storage
-
-    #[view(getStablecoinTokenId)]
-    #[storage_mapper("stablecoinTokenId")]
-    fn stablecoin_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
-
-    #[view(getLiquidStakingTokenId)]
-    #[storage_mapper("liquidStakingTokenId")]
-    fn liquid_staking_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
 
     #[storage_mapper("poolParams")]
     fn pool_params(&self) -> SingleValueMapper<Self::Storage, PoolParams<Self::BigUint>>;
@@ -214,4 +272,7 @@ pub trait SavingsAccount:
         &self,
         sft_nonce: u64,
     ) -> SingleValueMapper<Self::Storage, BorrowMetadata<Self::BigUint>>;
+
+    #[storage_mapper("stakingPositions")]
+    fn staking_positions(&self) -> LinkedListMapper<Self::Storage, u64>;
 }
