@@ -247,6 +247,8 @@ pub trait SavingsAccount:
             );
         }
 
+        // TODO: Maybe automatically claim staking rewards here for one last time?
+
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         self.send().direct(
             &caller,
