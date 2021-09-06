@@ -326,6 +326,16 @@ pub trait SavingsAccount:
         Ok(())
     }
 
+    #[endpoint(claimStakingRewards)]
+    fn claim_staking_rewards(&self) -> SCResult<OperationCompletionStatus> {
+        // TODO:
+        // Claim staking rewards
+        // iterate over staking_positions mapper:
+        // pop_front, push_back (if balance == 0 for that nonce, remove the entry)
+
+        Ok(OperationCompletionStatus::Completed)
+    }
+
     // private
 
     fn get_egld_price_in_stablecoin(&self) -> SCResult<Self::BigUint> {
