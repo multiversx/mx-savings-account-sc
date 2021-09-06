@@ -1,7 +1,8 @@
 elrond_wasm::imports!();
 
-const BASE_PRECISION: u32 = 1000000000;
-const SECONDS_IN_YEAR: u32 = 31556926;
+const BASE_PRECISION: u32 = 1_000_000_000;
+const EGLD_PRECISION: u64 = 1_000_000_000_000_000_000;
+const SECONDS_IN_YEAR: u32 = 31_556_926;
 
 #[elrond_wasm::module]
 pub trait MathModule {
@@ -47,6 +48,22 @@ pub trait MathModule {
     ) -> Self::BigUint {
         let bp = Self::BigUint::from(BASE_PRECISION);
         &(borrowed_amount * &bp) / total_pool_reserves
+    }
+
+    fn compute_staking_position_value(
+        &self,
+        egld_price_in_stablecoin: &Self::BigUint,
+        staking_position_value: &Self::BigUint,
+    ) -> Self::BigUint {
+        (egld_price_in_stablecoin * staking_position_value) / EGLD_PRECISION.into()
+    }
+
+    fn compute_borrow_amount(
+        &self,
+        borrow_rate: &Self::BigUint,
+        deposit_value: &Self::BigUint,
+    ) -> Self::BigUint {
+        borrow_rate * deposit_value / BASE_PRECISION.into()
     }
 
     fn compute_debt(
