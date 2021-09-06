@@ -12,7 +12,10 @@ use model::*;
 
 #[elrond_wasm::contract]
 pub trait SavingsAccount:
-    math::MathModule + price_aggregator::PriceAggregatorModule + tokens::TokensModule
+    math::MathModule
+    + multi_transfer::MultiTransferModule
+    + price_aggregator::PriceAggregatorModule
+    + tokens::TokensModule
 {
     #[allow(clippy::too_many_arguments)]
     #[init]
