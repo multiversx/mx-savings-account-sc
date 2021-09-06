@@ -81,8 +81,6 @@ pub trait SavingsAccount:
         let lend_token_id = self.lend_token_id().get();
         let sft_nonce = self.create_tokens(&lend_token_id, &payment_amount, &())?;
 
-        self.reserves(&stablecoin_token_id)
-            .update(|reserves| *reserves += &payment_amount);
         self.lend_metadata(sft_nonce).set(&LendMetadata {
             timestamp: self.blockchain().get_block_timestamp(),
             amount_in_circulation: payment_amount.clone(),
@@ -112,7 +110,7 @@ pub trait SavingsAccount:
         );
 
         let stablecoin_token_id = self.stablecoin_token_id().get();
-        let stablecoin_reserves = self.reserves(&stablecoin_token_id).get();
+        let stablecoin_reserves = self.get_reserves(&stablecoin_token_id);
         let borrowed_amount = self.borrowed_amount().get();
 
         let pool_params = self.pool_params().get();
@@ -150,8 +148,6 @@ pub trait SavingsAccount:
             });
         self.borrowed_amount()
             .update(|total| *total += &borrow_value);
-        self.reserves(&stablecoin_token_id)
-            .update(|reserves| *reserves -= &borrow_value);
 
         self.staking_positions().push_back(payment_nonce);
 
@@ -170,7 +166,101 @@ pub trait SavingsAccount:
     }
 
     #[payable("*")]
-    #[endpoint(withdraw)]
+    #[endpoint]
+    fn repay(&self) -> SCResult<()> {
+        self.require_borrow_token_issued()?;
+
+        let transfers = self.get_all_esdt_transfers();
+        require!(
+            transfers.len() == 2,
+            "Must send exactly 2 types of tokens: Borrow SFTs and Stablecoins"
+        );
+
+        let stablecoin_token_id = self.stablecoin_token_id().get();
+        let borrow_token_id = self.borrow_token_id().get();
+        require!(
+            transfers[0].token_name == stablecoin_token_id,
+            "First transfer must be the Stablecoins"
+        );
+        require!(
+            transfers[1].token_name == borrow_token_id,
+            "Second transfer token must be the Borrow Tokens"
+        );
+
+        let stablecoin_amount = &transfers[0].amount;
+        let borrow_token_amount = &transfers[1].amount;
+        let borrow_token_nonce = transfers[1].token_nonce;
+
+        let mut borrow_metadata = self.borrow_metadata(borrow_token_nonce).get();
+        borrow_metadata.amount_in_circulation -= borrow_token_amount;
+
+        if borrow_metadata.amount_in_circulation == 0 {
+            self.borrow_metadata(borrow_token_nonce).clear();
+        } else {
+            self.borrow_metadata(borrow_token_nonce)
+                .set(&borrow_metadata);
+        }
+
+        let borrowed_amount = self.borrowed_amount().get();
+        let stablecoin_reserves = self.get_reserves(&stablecoin_token_id);
+        let current_utilisation =
+            self.compute_capital_utilisation(&borrowed_amount, &stablecoin_reserves);
+
+        let pool_params = self.pool_params().get();
+        let borrow_rate = self.compute_borrow_rate(
+            &pool_params.base_borrow_rate,
+            &pool_params.borrow_rate_under_opt_factor,
+            &pool_params.borrow_rate_over_opt_factor,
+            &pool_params.optimal_utilisation,
+            &current_utilisation,
+        );
+
+        let egld_price_in_stablecoins = self.get_egld_price_in_stablecoin()?;
+        let staking_position_value =
+            self.compute_staking_position_value(&egld_price_in_stablecoins, borrow_token_amount);
+
+        let debt = self.compute_debt(
+            &staking_position_value,
+            borrow_metadata.timestamp,
+            &borrow_rate,
+        );
+        let total_stablecoins_needed = staking_position_value + debt;
+        require!(
+            stablecoin_amount >= &total_stablecoins_needed,
+            "Not enough stablecoins paid to cover the debt"
+        );
+
+        self.borrowed_amount()
+            .update(|borrowed_amount| *borrowed_amount -= &total_stablecoins_needed);
+
+        self.burn_tokens(&borrow_token_id, borrow_token_nonce, borrow_token_amount)?;
+
+        let caller = self.blockchain().get_caller();
+        let extra_stablecoins_paid = stablecoin_amount - &total_stablecoins_needed;
+        if extra_stablecoins_paid > 0 {
+            self.send().direct(
+                &caller,
+                &stablecoin_token_id,
+                0,
+                &extra_stablecoins_paid,
+                &[],
+            );
+        }
+
+        let liquid_staking_token_id = self.liquid_staking_token_id().get();
+        self.send().direct(
+            &caller,
+            &liquid_staking_token_id,
+            borrow_metadata.liquid_staking_token_nonce,
+            borrow_token_amount,
+            &[],
+        );
+
+        Ok(())
+    }
+
+    #[payable("*")]
+    #[endpoint]
     fn withdraw(
         &self,
         #[payment_token] payment_token: TokenIdentifier,
@@ -196,7 +286,7 @@ pub trait SavingsAccount:
         }
 
         let borrowed_amount = self.borrowed_amount().get();
-        let stablecoin_reserves = self.reserves(&stablecoin_token_id).get();
+        let stablecoin_reserves = self.get_reserves(&stablecoin_token_id);
         let current_utilisation =
             self.compute_capital_utilisation(&borrowed_amount, &stablecoin_reserves);
 
@@ -245,6 +335,17 @@ pub trait SavingsAccount:
         opt_price.ok_or("Failed to get EGLD price").into()
     }
 
+    fn get_reserves(&self, token_id: &TokenIdentifier) -> Self::BigUint {
+        self.blockchain().get_sc_balance(token_id, 0)
+    }
+
+    fn get_staking_amount_for_position(&self, sft_nonce: u64) -> Self::BigUint {
+        let liquid_staking_token_id = self.liquid_staking_token_id().get();
+
+        self.blockchain()
+            .get_sc_balance(&liquid_staking_token_id, sft_nonce)
+    }
+
     // storage
 
     #[storage_mapper("poolParams")]
@@ -253,13 +354,6 @@ pub trait SavingsAccount:
     #[view(getBorowedAmount)]
     #[storage_mapper("borrowedAmount")]
     fn borrowed_amount(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
-
-    #[view(getReserves)]
-    #[storage_mapper("reserves")]
-    fn reserves(
-        &self,
-        token_id: &TokenIdentifier,
-    ) -> SingleValueMapper<Self::Storage, Self::BigUint>;
 
     #[storage_mapper("lendMetadata")]
     fn lend_metadata(
@@ -273,6 +367,9 @@ pub trait SavingsAccount:
         sft_nonce: u64,
     ) -> SingleValueMapper<Self::Storage, BorrowMetadata<Self::BigUint>>;
 
+    // SFT nonces for the available staking positions
+    // Using LinkedListMapper to be able iterate and claim staking rewards,
+    // while also being able to split in multiple SC calls
     #[storage_mapper("stakingPositions")]
     fn staking_positions(&self) -> LinkedListMapper<Self::Storage, u64>;
 }

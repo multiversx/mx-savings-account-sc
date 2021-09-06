@@ -53,9 +53,9 @@ pub trait MathModule {
     fn compute_staking_position_value(
         &self,
         egld_price_in_stablecoin: &Self::BigUint,
-        staking_position_value: &Self::BigUint,
+        staked_amount: &Self::BigUint,
     ) -> Self::BigUint {
-        (egld_price_in_stablecoin * staking_position_value) / EGLD_PRECISION.into()
+        (egld_price_in_stablecoin * staked_amount) / EGLD_PRECISION.into()
     }
 
     fn compute_borrow_amount(
