@@ -4,6 +4,7 @@ elrond_wasm::imports!();
 
 mod math;
 mod model;
+mod multi_transfer;
 mod price_aggregator;
 mod tokens;
 
