@@ -10,6 +10,8 @@ mod tokens;
 
 use model::*;
 
+const DOLLAR_TICKER: &[u8] = b"USD";
+
 #[elrond_wasm::contract]
 pub trait SavingsAccount:
     math::MathModule
@@ -341,8 +343,10 @@ pub trait SavingsAccount:
     // private
 
     fn get_egld_price_in_stablecoin(&self) -> SCResult<Self::BigUint> {
-        let stablecoin_token_id = self.stablecoin_token_id().get();
-        let opt_price = self.get_price_for_pair(TokenIdentifier::egld(), stablecoin_token_id);
+        let opt_price = self.get_price_for_pair(
+            TokenIdentifier::egld(),
+            TokenIdentifier::from(DOLLAR_TICKER),
+        );
 
         opt_price.ok_or("Failed to get EGLD price").into()
     }
