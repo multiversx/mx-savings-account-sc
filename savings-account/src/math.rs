@@ -1,8 +1,8 @@
 elrond_wasm::imports!();
 
 const BASE_PRECISION: u32 = 1_000_000_000;
-const EGLD_PRECISION: u64 = 1_000_000_000_000_000_000;
-const SECONDS_IN_YEAR: u32 = 31_556_926;
+const DEFAULT_DECIMALS: u64 = 1_000_000_000_000_000_000;
+const EPOCHS_IN_YEAR: u32 = 355;
 
 #[elrond_wasm::module]
 pub trait MathModule {
@@ -52,10 +52,10 @@ pub trait MathModule {
 
     fn compute_staking_position_value(
         &self,
-        egld_price_in_stablecoin: &Self::BigUint,
+        staked_token_value_in_dollars: &Self::BigUint,
         staked_amount: &Self::BigUint,
     ) -> Self::BigUint {
-        (egld_price_in_stablecoin * staked_amount) / EGLD_PRECISION.into()
+        (staked_token_value_in_dollars * staked_amount) / DEFAULT_DECIMALS.into()
     }
 
     fn compute_borrow_amount(
@@ -69,33 +69,32 @@ pub trait MathModule {
     fn compute_debt(
         &self,
         amount: &Self::BigUint,
-        borrow_timestamp: u64,
+        borrow_epoch: u64,
         borrow_rate: &Self::BigUint,
     ) -> Self::BigUint {
-        let current_time = self.blockchain().get_block_timestamp();
-        let time_diff = current_time - borrow_timestamp;
+        let current_epoch = self.blockchain().get_block_epoch();
+        let epoch_diff = current_epoch - borrow_epoch;
 
         let bp = Self::BigUint::from(BASE_PRECISION);
-        let secs_year = Self::BigUint::from(SECONDS_IN_YEAR);
-        let time_unit_percentage = (&time_diff.into() * &bp) / secs_year;
+        let epochs_year = Self::BigUint::from(EPOCHS_IN_YEAR);
+        let time_unit_percentage = (&epoch_diff.into() * &bp) / epochs_year;
         let debt_percetange = &(&time_unit_percentage * borrow_rate) / &bp;
 
         (&debt_percetange * amount) / bp
     }
 
-    fn compute_withdrawal_amount(
+    fn compute_reward_amount(
         &self,
         amount: &Self::BigUint,
-        deposit_timestamp: u64,
-        deposit_rate: &Self::BigUint,
+        last_claim_epoch: u64,
+        reward_percentage_per_epoch: &Self::BigUint,
     ) -> Self::BigUint {
-        let current_time = self.blockchain().get_block_timestamp();
-        let time_diff = current_time - deposit_timestamp;
+        let current_epoch = self.blockchain().get_block_epoch();
+        let epoch_diff = current_epoch - last_claim_epoch;
 
         let bp = Self::BigUint::from(BASE_PRECISION);
-        let secs_year = Self::BigUint::from(SECONDS_IN_YEAR);
-        let percentage = (&time_diff.into() * deposit_rate) / secs_year;
+        let percentage = &epoch_diff.into() * reward_percentage_per_epoch;
 
-        amount + &((&percentage * amount) / bp)
+        (&percentage * amount) / bp
     }
 }

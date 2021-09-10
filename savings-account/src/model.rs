@@ -11,14 +11,16 @@ pub struct PoolParams<BigUint: BigUintApi> {
 }
 
 #[derive(TypeAbi, TopEncode, TopDecode)]
-pub struct LendMetadata<BigUint: BigUintApi> {
-    pub timestamp: u64,
+pub struct LendMetadata<BigUint: BigUintApi>
+{
+    pub last_claim_epoch: u64,
     pub amount_in_circulation: BigUint,
 }
 
 #[derive(TypeAbi, TopEncode, TopDecode)]
-pub struct BorrowMetadata<BigUint: BigUintApi> {
+pub struct BorrowMetadata<BigUint: BigUintApi>
+{
     pub liquid_staking_token_nonce: u64,
-    pub timestamp: u64,
+    pub borrow_epoch: u64,
     pub amount_in_circulation: BigUint,
 }

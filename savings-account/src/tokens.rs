@@ -1,5 +1,3 @@
-use elrond_wasm::elrond_codec::TopEncode;
-
 elrond_wasm::imports!();
 
 const TICKER_SEPARATOR: u8 = b'-';
@@ -101,12 +99,7 @@ pub trait TokensModule {
         token_id.as_name().into()
     }
 
-    fn create_tokens<T: TopEncode>(
-        &self,
-        token_id: &TokenIdentifier,
-        amount: &Self::BigUint,
-        attributes: &T,
-    ) -> SCResult<u64> {
+    fn create_tokens(&self, token_id: &TokenIdentifier, amount: &Self::BigUint) -> SCResult<u64> {
         self.require_local_roles_set(token_id)?;
 
         let sft_nonce = self.send().esdt_nft_create(
@@ -115,7 +108,7 @@ pub trait TokensModule {
             &BoxedBytes::empty(),
             &Self::BigUint::zero(),
             &BoxedBytes::empty(),
-            attributes,
+            &(),
             &[],
         );
 
@@ -203,6 +196,10 @@ pub trait TokensModule {
     #[view(getLiquidStakingTokenId)]
     #[storage_mapper("liquidStakingTokenId")]
     fn liquid_staking_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
+
+    #[view(getStakedTokenId)]
+    #[storage_mapper("stakedTokenId")]
+    fn staked_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
 
     #[view(getLendTokenId)]
     #[storage_mapper("lendTokenId")]

@@ -21,3 +21,7 @@ optional = true
 
 [dev-dependencies.elrond-wasm-debug]
 version = "0.18.2"
+
+[dependencies.price-aggregator-proxy]
+git = "https://github.com/ElrondNetwork/sc-chainlink-rs"
+rev = "4e1e19c"
