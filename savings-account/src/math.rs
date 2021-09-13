@@ -1,7 +1,7 @@
 elrond_wasm::imports!();
 
-const BASE_PRECISION: u32 = 1_000_000_000;
-const DEFAULT_DECIMALS: u64 = 1_000_000_000_000_000_000;
+const BASE_PRECISION: u32 = 1_000_000_000; // Could be reduced maybe? Since we're working with epochs instead of seconds
+const DEFAULT_DECIMALS: u64 = 1_000_000_000_000_000_000; // most tokens have 10^18 decimals. TODO: Add as configurable value
 const EPOCHS_IN_YEAR: u32 = 355;
 
 #[elrond_wasm::module]
@@ -86,12 +86,15 @@ pub trait MathModule {
     fn compute_reward_amount(
         &self,
         amount: &Self::BigUint,
-        last_claim_epoch: u64,
+        lend_epoch: u64,
+        last_calculate_rewards_epoch: u64,
         reward_percentage_per_epoch: &Self::BigUint,
     ) -> Self::BigUint {
-        let current_epoch = self.blockchain().get_block_epoch();
-        let epoch_diff = current_epoch - last_claim_epoch;
+        if lend_epoch > last_calculate_rewards_epoch {
+            return Self::BigUint::zero();
+        }
 
+        let epoch_diff = last_calculate_rewards_epoch - lend_epoch;
         let bp = Self::BigUint::from(BASE_PRECISION);
         let percentage = &epoch_diff.into() * reward_percentage_per_epoch;
 

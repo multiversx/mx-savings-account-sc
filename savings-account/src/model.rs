@@ -13,7 +13,7 @@ pub struct PoolParams<BigUint: BigUintApi> {
 #[derive(TypeAbi, TopEncode, TopDecode)]
 pub struct LendMetadata<BigUint: BigUintApi>
 {
-    pub last_claim_epoch: u64,
+    pub lend_epoch: u64,
     pub amount_in_circulation: BigUint,
 }
 
