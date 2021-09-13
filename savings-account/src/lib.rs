@@ -314,6 +314,9 @@ pub trait SavingsAccount:
         self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount)?;
 
         let rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
+        self.unclaimed_rewards()
+            .update(|unclaimed_rewards| *unclaimed_rewards -= &rewards_amount);
+
         let total_withdraw_amount = payment_amount + rewards_amount;
         let caller = self.blockchain().get_caller();
         self.send().direct(
@@ -458,10 +461,13 @@ pub trait SavingsAccount:
             .direct(&caller, &lend_token_id, new_sft_nonce, &payment_amount, &[]);
 
         // send rewards
-        let reward_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
+        let rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
+        self.unclaimed_rewards()
+            .update(|unclaimed_rewards| *unclaimed_rewards -= &rewards_amount);
+
         let stablecoin_token_id = self.stablecoin_token_id().get();
         self.send()
-            .direct(&caller, &stablecoin_token_id, 0, &reward_amount, &[]);
+            .direct(&caller, &stablecoin_token_id, 0, &rewards_amount, &[]);
 
         Ok(())
     }
