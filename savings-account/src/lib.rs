@@ -11,6 +11,8 @@ mod tokens;
 use model::*;
 use price_aggregator_proxy::*;
 
+use crate::staking_rewards::StakingPosition;
+
 #[elrond_wasm::contract]
 pub trait SavingsAccount:
     math::MathModule
@@ -81,6 +83,13 @@ pub trait SavingsAccount:
 
         let current_epoch = self.blockchain().get_block_epoch();
         self.last_staking_rewards_claim_epoch().set(&current_epoch);
+
+        // init staking position list
+        self.staking_position(0).set(&StakingPosition {
+            liquid_staking_nonce: 0,
+            next_pos_id: 0,
+            prev_pos_id: 0,
+        });
 
         Ok(())
     }
@@ -166,17 +175,16 @@ pub trait SavingsAccount:
 
         let borrow_token_id = self.borrow_token_id().get();
         let borrow_token_nonce = self.create_tokens(&borrow_token_id, &payment_amount)?;
+        let staking_pos_id = self.add_staking_position(payment_nonce);
 
         self.borrow_metadata(borrow_token_nonce)
             .set(&BorrowMetadata {
                 amount_in_circulation: payment_amount.clone(),
-                liquid_staking_token_nonce: payment_nonce,
+                staking_position_id: staking_pos_id,
                 borrow_epoch: self.blockchain().get_block_epoch(),
             });
         self.borrowed_amount()
             .update(|total| *total += &borrow_value);
-
-        let _ = self.staking_positions().insert(payment_nonce);
 
         let caller = self.blockchain().get_caller();
         self.send().direct(
@@ -272,22 +280,24 @@ pub trait SavingsAccount:
         }
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
-        let liquid_staking_tokens_for_nonce = self.blockchain().get_sc_balance(
-            &liquid_staking_token_id,
-            borrow_metadata.liquid_staking_token_nonce,
-        );
+        let liquid_staking_nonce = self
+            .staking_position(borrow_metadata.staking_position_id)
+            .get()
+            .liquid_staking_nonce;
+
+        let liquid_staking_tokens_for_nonce = self
+            .blockchain()
+            .get_sc_balance(&liquid_staking_token_id, liquid_staking_nonce);
 
         // no tokens left after transfer, so we clear the entry
         if &liquid_staking_tokens_for_nonce == borrow_token_amount {
-            let _ = self
-                .staking_positions()
-                .remove(&borrow_metadata.liquid_staking_token_nonce);
+            self.remove_staking_position(borrow_metadata.staking_position_id);
         }
 
         self.send().direct(
             &caller,
             &liquid_staking_token_id,
-            borrow_metadata.liquid_staking_token_nonce,
+            liquid_staking_nonce,
             borrow_token_amount,
             &[],
         );

@@ -20,7 +20,7 @@ pub struct LendMetadata<BigUint: BigUintApi>
 #[derive(TypeAbi, TopEncode, TopDecode)]
 pub struct BorrowMetadata<BigUint: BigUintApi>
 {
-    pub liquid_staking_token_nonce: u64,
+    pub staking_position_id: u64,
     pub borrow_epoch: u64,
     pub amount_in_circulation: BigUint,
 }
