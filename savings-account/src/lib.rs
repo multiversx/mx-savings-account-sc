@@ -230,7 +230,7 @@ pub trait SavingsAccount:
         self.update_borrow_metadata(
             &mut borrow_metadata,
             borrow_token_nonce,
-            &borrow_token_amount,
+            borrow_token_amount,
         );
 
         let borrowed_amount = self.borrowed_amount().get();
@@ -516,7 +516,7 @@ pub trait SavingsAccount:
         if lend_metadata.amount_in_circulation == 0 {
             self.lend_metadata(lend_nonce).clear();
         } else {
-            self.lend_metadata(lend_nonce).set(&lend_metadata);
+            self.lend_metadata(lend_nonce).set(lend_metadata);
         }
     }
 
@@ -531,7 +531,7 @@ pub trait SavingsAccount:
         if borrow_metadata.amount_in_circulation == 0 {
             self.borrow_metadata(borrow_nonce).clear();
         } else {
-            self.borrow_metadata(borrow_nonce).set(&borrow_metadata);
+            self.borrow_metadata(borrow_nonce).set(borrow_metadata);
         }
     }
 
