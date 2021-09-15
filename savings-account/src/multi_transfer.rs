@@ -1,6 +1,11 @@
 elrond_wasm::imports!();
 
+use elrond_wasm::HexCallDataSerializer;
+
 // Temporary until the next version is released
+// In 0.19, this entire file will be removed
+
+pub const ESDT_MULTI_TRANSFER_STRING: &[u8] = b"MultiESDTNFTTransfer";
 
 extern "C" {
     fn bigIntNew(value: i64) -> i32;
@@ -79,5 +84,84 @@ pub trait MultiTransferModule {
         }
 
         transfers
+    }
+
+    fn multi_transfer_via_execute_on_dest_context(
+        &self,
+        to: &Address,
+        transfers: &[EsdtTokenPayment<Self::BigUint>],
+        endpoint_name: &BoxedBytes,
+        args: &[BoxedBytes],
+    ) -> Vec<BoxedBytes> {
+        let mut arg_buffer = ArgBuffer::new();
+        arg_buffer.push_argument_bytes(to.as_bytes());
+        arg_buffer.push_argument_bytes(&transfers.len().to_be_bytes()[..]);
+
+        for transf in transfers {
+            arg_buffer.push_argument_bytes(transf.token_name.as_esdt_identifier());
+            arg_buffer.push_argument_bytes(&transf.token_nonce.to_be_bytes()[..]);
+            arg_buffer.push_argument_bytes(transf.amount.to_bytes_be().as_slice());
+        }
+
+        if !endpoint_name.is_empty() {
+            arg_buffer.push_argument_bytes(endpoint_name.as_slice());
+
+            for arg in args {
+                arg_buffer.push_argument_bytes(arg.as_slice());
+            }
+        }
+
+        self.send().execute_on_dest_context_raw(
+            self.blockchain().get_gas_left(),
+            &self.blockchain().get_sc_address(),
+            &Self::BigUint::zero(),
+            ESDT_MULTI_TRANSFER_STRING,
+            &arg_buffer,
+        )
+    }
+
+    fn multi_transfer_via_async_call(
+        &self,
+        to: &Address,
+        transfers: &[EsdtTokenPayment<Self::BigUint>],
+        endpoint_name: &BoxedBytes,
+        args: &[BoxedBytes],
+        callback_name: &BoxedBytes,
+        callback_args: &[BoxedBytes],
+    ) -> ! {
+        let mut serializer = HexCallDataSerializer::new(ESDT_MULTI_TRANSFER_STRING);
+        serializer.push_argument_bytes(to.as_bytes());
+        serializer.push_argument_bytes(&transfers.len().to_be_bytes()[..]);
+
+        for transf in transfers {
+            serializer.push_argument_bytes(transf.token_name.as_esdt_identifier());
+            serializer.push_argument_bytes(&transf.token_nonce.to_be_bytes()[..]);
+            serializer.push_argument_bytes(transf.amount.to_bytes_be().as_slice());
+        }
+
+        if !endpoint_name.is_empty() {
+            serializer.push_argument_bytes(endpoint_name.as_slice());
+
+            for arg in args {
+                serializer.push_argument_bytes(arg.as_slice());
+            }
+        }
+
+        if !callback_name.is_empty() {
+            let mut callback_data_serializer = HexCallDataSerializer::new(callback_name.as_slice());
+
+            for cb_arg in callback_args {
+                callback_data_serializer.push_argument_bytes(cb_arg.as_slice());
+            }
+
+            self.send()
+                .storage_store_tx_hash_key(callback_data_serializer.as_slice());
+        }
+
+        self.send().async_call_raw(
+            &self.blockchain().get_sc_address(),
+            &Self::BigUint::zero(),
+            serializer.as_slice(),
+        );
     }
 }

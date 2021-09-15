@@ -144,9 +144,7 @@ pub trait TokensModule {
     fn require_local_roles_set(&self, token_id: &TokenIdentifier) -> SCResult<()> {
         let roles = self.blockchain().get_esdt_local_roles(token_id);
         for required_role in REQUIRED_LOCAL_ROLES {
-            if !roles.contains(required_role) {
-                return sc_error!("ESDT local roles not set");
-            }
+            require!(roles.contains(required_role), "ESDT local roles not set");
         }
 
         Ok(())
