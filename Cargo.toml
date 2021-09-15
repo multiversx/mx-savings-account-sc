@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "savings-account",
+    "savings-account/abi",
+]
