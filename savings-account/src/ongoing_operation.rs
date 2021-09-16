@@ -2,8 +2,8 @@ elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
 const MIN_GAS_TO_SAVE_PROGRESS: u64 = 100_000_000;
-pub const ANOTHER_ONGOING_OP_ERR_MSG: &'static [u8] = b"Another ongoing operation is in progress";
-pub const CALLBACK_IN_PROGRESS_ERR_MSG: &'static [u8] = b"Callback not executed yet";
+pub const ANOTHER_ONGOING_OP_ERR_MSG: &[u8] = b"Another ongoing operation is in progress";
+pub const CALLBACK_IN_PROGRESS_ERR_MSG: &[u8] = b"Callback not executed yet";
 
 #[derive(TopDecode, TopEncode, TypeAbi, PartialEq)]
 pub enum OngoingOperationType {

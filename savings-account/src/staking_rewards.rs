@@ -101,7 +101,7 @@ pub trait StakingRewardsModule:
             callback_executed: false,
         });
 
-        if transfers.len() > 0 {
+        if !transfers.is_empty() {
             // TODO: Use SC proxy instead of manual call
             let delegation_sc_address = self.delegation_sc_address().get();
             self.multi_transfer_via_async_call(
