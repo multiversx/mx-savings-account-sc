@@ -87,6 +87,7 @@ pub trait StakingRewardsModule:
         );
     }
 
+    // TODO: Convert EGLD to WrapedEgld first (DEX does not convert EGLD directly)
     #[endpoint(convertStakingTokenToStablecoin)]
     fn convert_staking_token_to_stablecoin(&self) -> SCResult<AsyncCall<Self::SendApi>> {
         let current_epoch = self.blockchain().get_block_epoch();
