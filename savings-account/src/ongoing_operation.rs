@@ -1,12 +1,20 @@
 elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
-const MIN_GAS_TO_SAVE_PROGRESS: u64 = 10_000_000;
+const MIN_GAS_TO_SAVE_PROGRESS: u64 = 100_000_000;
+pub const ANOTHER_ONGOING_OP_ERR_MSG: &'static [u8] = b"Another ongoing operation is in progress";
+pub const CALLBACK_IN_PROGRESS_ERR_MSG: &'static [u8] = b"Callback not executed yet";
 
 #[derive(TopDecode, TopEncode, TypeAbi, PartialEq)]
 pub enum OngoingOperationType {
     None,
-    CalculateTotalLenderRewards { lend_nonce: u64 },
+    CalculateTotalLenderRewards {
+        lend_nonce: u64,
+    },
+    ClaimStakingRewards {
+        pos_id: u64,
+        callback_executed: bool,
+    },
 }
 
 pub enum LoopOp {

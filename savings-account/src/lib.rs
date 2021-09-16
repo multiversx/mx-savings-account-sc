@@ -12,7 +12,7 @@ mod tokens;
 use model::*;
 use price_aggregator_proxy::*;
 
-use crate::ongoing_operation::{LoopOp, OngoingOperationType};
+use crate::ongoing_operation::{LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG};
 use crate::staking_rewards::StakingPosition;
 
 #[elrond_wasm::contract]
@@ -429,7 +429,7 @@ pub trait SavingsAccount:
         let mut current_lend_nonce = match self.load_operation() {
             OngoingOperationType::None => 1u64,
             OngoingOperationType::CalculateTotalLenderRewards { lend_nonce } => lend_nonce,
-            _ => return sc_error!("Another ongoing operation is in progress"),
+            _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
         };
         let last_lend_nonce = self.blockchain().get_current_esdt_nft_nonce(
             &self.blockchain().get_sc_address(),
@@ -596,8 +596,4 @@ pub trait SavingsAccount:
         &self,
         sft_nonce: u64,
     ) -> SingleValueMapper<Self::Storage, BorrowMetadata<Self::BigUint>>;
-
-    // TODO:
-    // ----------- Ongoing operation logic -----------------------
-    //
 }
