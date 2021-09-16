@@ -5,16 +5,20 @@ elrond_wasm::imports!();
 mod math;
 mod model;
 mod multi_transfer;
+mod staking_rewards;
 mod tokens;
 
 use model::*;
 use price_aggregator_proxy::*;
+
+use crate::staking_rewards::StakingPosition;
 
 #[elrond_wasm::contract]
 pub trait SavingsAccount:
     math::MathModule
     + multi_transfer::MultiTransferModule
     + price_aggregator_proxy::PriceAggregatorModule
+    + staking_rewards::StakingRewardsModule
     + tokens::TokensModule
 {
     #[allow(clippy::too_many_arguments)]
@@ -24,6 +28,8 @@ pub trait SavingsAccount:
         stablecoin_token_id: TokenIdentifier,
         liquid_staking_token_id: TokenIdentifier,
         staked_token_id: TokenIdentifier,
+        delegation_sc_address: Address,
+        dex_swap_sc_address: Address,
         price_aggregator_address: Address,
         base_borrow_rate: Self::BigUint,
         borrow_rate_under_opt_factor: Self::BigUint,
@@ -44,14 +50,25 @@ pub trait SavingsAccount:
             "Invalid staked token ID"
         );
         require!(
+            self.blockchain().is_smart_contract(&delegation_sc_address),
+            "Invalid Delegation SC address"
+        );
+        require!(
+            self.blockchain().is_smart_contract(&dex_swap_sc_address),
+            "Invalid DEX Swap SC address"
+        );
+        require!(
             self.blockchain()
                 .is_smart_contract(&price_aggregator_address),
-            "Invalid price aggregator address"
+            "Invalid Price Aggregator SC address"
         );
 
         self.stablecoin_token_id().set(&stablecoin_token_id);
         self.liquid_staking_token_id().set(&liquid_staking_token_id);
         self.staked_token_id().set(&staked_token_id);
+
+        self.delegation_sc_address().set(&delegation_sc_address);
+        self.dex_swap_sc_address().set(&dex_swap_sc_address);
         self.price_aggregator_address()
             .set(&price_aggregator_address);
 
@@ -66,6 +83,13 @@ pub trait SavingsAccount:
 
         let current_epoch = self.blockchain().get_block_epoch();
         self.last_staking_rewards_claim_epoch().set(&current_epoch);
+
+        // init staking position list
+        self.staking_position(0).set(&StakingPosition {
+            liquid_staking_nonce: 0,
+            next_pos_id: 0,
+            prev_pos_id: 0,
+        });
 
         Ok(())
     }
@@ -151,17 +175,16 @@ pub trait SavingsAccount:
 
         let borrow_token_id = self.borrow_token_id().get();
         let borrow_token_nonce = self.create_tokens(&borrow_token_id, &payment_amount)?;
+        let staking_pos_id = self.add_staking_position(payment_nonce);
 
         self.borrow_metadata(borrow_token_nonce)
             .set(&BorrowMetadata {
                 amount_in_circulation: payment_amount.clone(),
-                liquid_staking_token_nonce: payment_nonce,
+                staking_position_id: staking_pos_id,
                 borrow_epoch: self.blockchain().get_block_epoch(),
             });
         self.borrowed_amount()
             .update(|total| *total += &borrow_value);
-
-        let _ = self.staking_positions().insert(payment_nonce);
 
         let caller = self.blockchain().get_caller();
         self.send().direct(
@@ -207,7 +230,7 @@ pub trait SavingsAccount:
         self.update_borrow_metadata(
             &mut borrow_metadata,
             borrow_token_nonce,
-            &borrow_token_amount,
+            borrow_token_amount,
         );
 
         let borrowed_amount = self.borrowed_amount().get();
@@ -257,22 +280,24 @@ pub trait SavingsAccount:
         }
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
-        let liquid_staking_tokens_for_nonce = self.blockchain().get_sc_balance(
-            &liquid_staking_token_id,
-            borrow_metadata.liquid_staking_token_nonce,
-        );
+        let liquid_staking_nonce = self
+            .staking_position(borrow_metadata.staking_position_id)
+            .get()
+            .liquid_staking_nonce;
+
+        let liquid_staking_tokens_for_nonce = self
+            .blockchain()
+            .get_sc_balance(&liquid_staking_token_id, liquid_staking_nonce);
 
         // no tokens left after transfer, so we clear the entry
         if &liquid_staking_tokens_for_nonce == borrow_token_amount {
-            let _ = self
-                .staking_positions()
-                .remove(&borrow_metadata.liquid_staking_token_nonce);
+            self.remove_staking_position(borrow_metadata.staking_position_id);
         }
 
         self.send().direct(
             &caller,
             &liquid_staking_token_id,
-            borrow_metadata.liquid_staking_token_nonce,
+            liquid_staking_nonce,
             borrow_token_amount,
             &[],
         );
@@ -330,102 +355,6 @@ pub trait SavingsAccount:
         Ok(())
     }
 
-    // TODO: Ongoing operation pattern
-    #[endpoint(claimStakingRewards)]
-    fn claim_staking_rewards(&self) -> SCResult<()> {
-        let current_epoch = self.blockchain().get_block_epoch();
-        let last_claim_epoch = self.last_staking_rewards_claim_epoch().get();
-        require!(
-            current_epoch > last_claim_epoch,
-            "Already claimed this epoch"
-        );
-        // TODO:
-        // Claim staking rewards
-        // Async call to delegation SC
-        // update Staking position SFT nonces and last_claim_epoch
-
-        Ok(())
-    }
-
-    #[endpoint(convertStakingTokenToStablecoin)]
-    fn convert_staking_token_to_stablecoin(&self) -> SCResult<()> {
-        let current_epoch = self.blockchain().get_block_epoch();
-        let last_claim_epoch = self.last_staking_rewards_claim_epoch().get();
-        require!(
-            last_claim_epoch == current_epoch,
-            "Must claim rewards for this epoch first"
-        );
-
-        // TODO:
-        // Exchange staking tokens to stablecoins through MEX SCs
-        // Update "stablecoin_reserves" in callback
-
-        Ok(())
-    }
-
-    // TODO: Ongoing operation pattern
-    #[endpoint(calculateTotalRewards)]
-    fn calculate_total_rewards(&self) -> SCResult<()> {
-        // TODO: Use something like a SetMapper or a custom mapper that will hold valid nonces
-        // There's no point in iterating over all the nonces and checking for empty over and over
-        let last_lend_nonce = self.blockchain().get_current_esdt_nft_nonce(
-            &self.blockchain().get_sc_address(),
-            &self.lend_token_id().get(),
-        );
-        let reward_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
-        let last_calculate_rewards_epoch = self.last_calculate_rewards_epoch().get();
-
-        let last_staking_rewards_claim_epoch = self.last_staking_rewards_claim_epoch().get();
-        let current_epoch = self.blockchain().get_block_epoch();
-
-        require!(
-            last_staking_rewards_claim_epoch == current_epoch,
-            "Must claim staking rewards for this epoch first"
-        );
-        require!(
-            last_calculate_rewards_epoch < current_epoch,
-            "Already calculated rewards this epoch"
-        );
-
-        let mut total_rewards = Self::BigUint::zero();
-        for i in 1..=last_lend_nonce {
-            if self.lend_metadata(i).is_empty() {
-                continue;
-            }
-
-            let metadata = self.lend_metadata(i).get();
-            let reward_amount = self.compute_reward_amount(
-                &metadata.amount_in_circulation,
-                metadata.lend_epoch,
-                last_calculate_rewards_epoch,
-                &reward_percentage_per_epoch,
-            );
-
-            total_rewards += reward_amount;
-        }
-
-        let prev_unclaimed_rewards = self.unclaimed_rewards().get();
-        let extra_unclaimed = &total_rewards - &prev_unclaimed_rewards;
-
-        // TODO: Maybe calculate by how much it's lower?
-        // For example, if 1000 is needed, but only 900 is available, that's 10% less
-        // So store this "10%" in storage and decrease everyone's rewards by 10% on lenderClaim?
-        let stablecoin_reserves = self.stablecoin_reserves().get();
-        require!(
-            stablecoin_reserves >= extra_unclaimed,
-            "Total rewards exceed reserves"
-        );
-
-        let current_epoch = self.blockchain().get_block_epoch();
-        self.last_calculate_rewards_epoch().set(&current_epoch);
-        self.unclaimed_rewards().set(&total_rewards);
-
-        let leftover_reserves = stablecoin_reserves - extra_unclaimed;
-        self.stablecoin_reserves().set(&leftover_reserves);
-
-        Ok(())
-    }
-
     #[payable("*")]
     #[endpoint(lenderClaimRewards)]
     fn lender_claim_rewards(
@@ -468,6 +397,69 @@ pub trait SavingsAccount:
         let stablecoin_token_id = self.stablecoin_token_id().get();
         self.send()
             .direct(&caller, &stablecoin_token_id, 0, &rewards_amount, &[]);
+
+        Ok(())
+    }
+
+    // TODO: Ongoing operation pattern
+    #[endpoint(calculateTotalLenderRewards)]
+    fn calculate_total_lender_rewards(&self) -> SCResult<()> {
+        // TODO: Use something like a SetMapper or a custom mapper that will hold valid nonces
+        // There's no point in iterating over all the nonces and checking for empty over and over
+        let last_lend_nonce = self.blockchain().get_current_esdt_nft_nonce(
+            &self.blockchain().get_sc_address(),
+            &self.lend_token_id().get(),
+        );
+        let reward_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
+        let last_calculate_rewards_epoch = self.last_calculate_rewards_epoch().get();
+
+        let last_staking_token_convert_epoch = self.last_staking_token_convert_epoch().get();
+        let current_epoch = self.blockchain().get_block_epoch();
+
+        require!(
+            last_staking_token_convert_epoch == current_epoch,
+            "Must claim staking rewards and convert to stablecoin for this epoch first"
+        );
+        require!(
+            last_calculate_rewards_epoch < current_epoch,
+            "Already calculated rewards this epoch"
+        );
+
+        let mut total_rewards = Self::BigUint::zero();
+        for i in 1..=last_lend_nonce {
+            if self.lend_metadata(i).is_empty() {
+                continue;
+            }
+
+            let metadata = self.lend_metadata(i).get();
+            let reward_amount = self.compute_reward_amount(
+                &metadata.amount_in_circulation,
+                metadata.lend_epoch,
+                last_calculate_rewards_epoch,
+                &reward_percentage_per_epoch,
+            );
+
+            total_rewards += reward_amount;
+        }
+
+        let prev_unclaimed_rewards = self.unclaimed_rewards().get();
+        let extra_unclaimed = &total_rewards - &prev_unclaimed_rewards;
+
+        // TODO: Maybe calculate by how much it's lower?
+        // For example, if 1000 is needed, but only 900 is available, that's 10% less
+        // So store this "10%" in storage and decrease everyone's rewards by 10% on lenderClaim?
+        let stablecoin_reserves = self.stablecoin_reserves().get();
+        require!(
+            stablecoin_reserves >= extra_unclaimed,
+            "Total rewards exceed reserves"
+        );
+
+        let current_epoch = self.blockchain().get_block_epoch();
+        self.last_calculate_rewards_epoch().set(&current_epoch);
+        self.unclaimed_rewards().set(&total_rewards);
+
+        let leftover_reserves = stablecoin_reserves - extra_unclaimed;
+        self.stablecoin_reserves().set(&leftover_reserves);
 
         Ok(())
     }
@@ -524,7 +516,7 @@ pub trait SavingsAccount:
         if lend_metadata.amount_in_circulation == 0 {
             self.lend_metadata(lend_nonce).clear();
         } else {
-            self.lend_metadata(lend_nonce).set(&lend_metadata);
+            self.lend_metadata(lend_nonce).set(lend_metadata);
         }
     }
 
@@ -539,7 +531,7 @@ pub trait SavingsAccount:
         if borrow_metadata.amount_in_circulation == 0 {
             self.borrow_metadata(borrow_nonce).clear();
         } else {
-            self.borrow_metadata(borrow_nonce).set(&borrow_metadata);
+            self.borrow_metadata(borrow_nonce).set(borrow_metadata);
         }
     }
 
@@ -577,26 +569,6 @@ pub trait SavingsAccount:
         &self,
         sft_nonce: u64,
     ) -> SingleValueMapper<Self::Storage, BorrowMetadata<Self::BigUint>>;
-
-    #[storage_mapper("stakingPositions")]
-    fn staking_positions(&self) -> SafeSetMapper<Self::Storage, u64>;
-
-    #[view(getLastStakingRewardsClaimEpoch)]
-    #[storage_mapper("lastStakingRewardsClaimEpoch")]
-    fn last_staking_rewards_claim_epoch(&self) -> SingleValueMapper<Self::Storage, u64>;
-
-    #[view(getLastCalculateRewardsEpoch)]
-    #[storage_mapper("lastCalculateRewardsEpoch")]
-    fn last_calculate_rewards_epoch(&self) -> SingleValueMapper<Self::Storage, u64>;
-
-    #[view(getUnclaimedRewards)]
-    #[storage_mapper("unclaimedRewards")]
-    fn unclaimed_rewards(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
-
-    // TODO: Update after claimStakingRewards and converting staking token to stablecoins
-    #[view(getStablecoinReserves)]
-    #[storage_mapper("stablecoinReserves")]
-    fn stablecoin_reserves(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
 
     // TODO:
     // ----------- Ongoing operation logic -----------------------
