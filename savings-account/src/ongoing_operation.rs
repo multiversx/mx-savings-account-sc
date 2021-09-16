@@ -15,6 +15,7 @@ pub enum OngoingOperationType {
         pos_id: u64,
         callback_executed: bool,
     },
+    ConvertStakingTokenToStablecoin,
 }
 
 pub enum LoopOp {

@@ -120,6 +120,8 @@ pub trait StakingRewardsModule:
     // TODO: Convert EGLD to WrapedEgld first (DEX does not convert EGLD directly)
     #[endpoint(convertStakingTokenToStablecoin)]
     fn convert_staking_token_to_stablecoin(&self) -> SCResult<AsyncCall<Self::SendApi>> {
+        self.require_no_ongoing_operation()?;
+
         let current_epoch = self.blockchain().get_block_epoch();
         let last_claim_epoch = self.last_staking_rewards_claim_epoch().get();
         require!(
@@ -138,6 +140,8 @@ pub trait StakingRewardsModule:
         let staking_token_id = self.staked_token_id().get();
         let staking_token_balance = self.blockchain().get_sc_balance(&staking_token_id, 0);
         let stablecoin_token_id = self.stablecoin_token_id().get();
+
+        self.save_progress(&OngoingOperationType::ConvertStakingTokenToStablecoin);
 
         Ok(self
             .dex_proxy(dex_sc_address)
@@ -225,6 +229,8 @@ pub trait StakingRewardsModule:
         self.last_staking_token_convert_epoch().set(&current_epoch);
         self.stablecoin_reserves()
             .update(|stablecoin_reserves| *stablecoin_reserves += payment_amount);
+
+        self.clear_operation();
 
         Ok(())
     }
