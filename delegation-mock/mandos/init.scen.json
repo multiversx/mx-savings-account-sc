@@ -25,7 +25,7 @@
         },
         {
             "step": "scDeploy",
-            "txId": "deploy",
+            "txId": "deploy-delegation",
             "tx": {
                 "from": "address:delegation-owner",
                 "contractCode": "file:../output/delegation-mock.wasm",

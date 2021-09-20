@@ -23,7 +23,7 @@
         },
         {
             "step": "scDeploy",
-            "txId": "deploy",
+            "txId": "deploy-dex",
             "tx": {
                 "from": "address:dex-owner",
                 "contractCode": "file:../output/dex-mock.wasm",
