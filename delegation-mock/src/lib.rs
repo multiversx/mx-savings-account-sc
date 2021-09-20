@@ -40,7 +40,10 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
 
     #[payable("*")]
     #[endpoint(claimRewards)]
-    fn claim_rewards(&self) -> SCResult<()> {
+    fn claim_rewards(
+        &self,
+        #[var_args] opt_receive_funds_func: OptionalArg<BoxedBytes>,
+    ) -> SCResult<()> {
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         let transfers = self.get_all_esdt_transfers();
 
@@ -71,8 +74,22 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
 
         let rewards_amount = total_amount / 10u64.into();
         let caller = self.blockchain().get_caller();
-        self.send()
-            .direct(&caller, &TokenIdentifier::egld(), 0, &rewards_amount, &[]);
+
+        match opt_receive_funds_func {
+            OptionalArg::None => {
+                self.send()
+                    .direct(&caller, &TokenIdentifier::egld(), 0, &rewards_amount, &[])
+            }
+            OptionalArg::Some(func_name) => self.send().direct_esdt_execute(
+                &caller,
+                &TokenIdentifier::egld(),
+                &rewards_amount,
+                self.blockchain().get_gas_left() / 4,
+                func_name.as_slice(),
+                &ArgBuffer::new(),
+            )?,
+        }
+
         self.multi_transfer_via_async_call(
             &caller,
             &new_tokens,
