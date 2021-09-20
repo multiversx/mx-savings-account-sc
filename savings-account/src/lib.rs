@@ -4,7 +4,7 @@ elrond_wasm::imports!();
 
 mod math;
 mod model;
-mod multi_transfer;
+pub mod multi_transfer;
 mod ongoing_operation;
 mod staking_rewards;
 mod tokens;

@@ -15,6 +15,10 @@ pub trait DexMock {
     fn init(&self) {}
 
     #[payable("*")]
+    #[endpoint]
+    fn deposit(&self) {}
+
+    #[payable("*")]
     #[endpoint(swapTokensFixedInput)]
     fn swap_tokens_fixed_input(
         &self,
@@ -25,7 +29,7 @@ pub trait DexMock {
         #[var_args] opt_accept_funds_func: OptionalArg<BoxedBytes>,
     ) -> FftTokenAmountPair<Self::BigUint> {
         let caller = self.blockchain().get_caller();
-        let amount_out = amount_in * 500u64.into();
+        let amount_out = amount_in * 10u64.into();
 
         let _ = self.send().direct_esdt_execute(
             &caller,
