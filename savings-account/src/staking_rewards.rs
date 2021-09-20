@@ -1,6 +1,10 @@
 elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
+use crate::ongoing_operation::{
+    LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
+};
+
 const DELEGATION_CLAIM_REWARDS_ENDPOINT: &[u8] = b"claimRewards";
 
 mod dex_proxy {
@@ -30,7 +34,9 @@ pub struct StakingPosition {
 
 #[elrond_wasm::module]
 pub trait StakingRewardsModule:
-    crate::multi_transfer::MultiTransferModule + crate::tokens::TokensModule
+    crate::multi_transfer::MultiTransferModule
+    + crate::ongoing_operation::OngoingOperationModule
+    + crate::tokens::TokensModule
 {
     // endpoints
 
@@ -45,16 +51,29 @@ pub trait StakingRewardsModule:
             "Already claimed this epoch"
         );
 
+        let mut pos_id = self.get_first_staking_position_id();
+        let mut current_staking_pos = match self.load_operation() {
+            OngoingOperationType::None => self
+                .get_first_staking_position()
+                .ok_or("No staking positions available")?,
+            OngoingOperationType::ClaimStakingRewards {
+                pos_id,
+                callback_executed,
+            } => {
+                if !callback_executed {
+                    return sc_error!(CALLBACK_IN_PROGRESS_ERR_MSG);
+                }
+
+                self.staking_position(pos_id).get()
+            }
+            _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
+        };
+
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         let mut transfers = Vec::new();
         let mut callback_pos_ids = Vec::new();
 
-        let mut pos_id = self.get_first_staking_position_id();
-        let mut current_staking_pos = self
-            .get_first_staking_position()
-            .ok_or("No staking positions available")?;
-
-        loop {
+        let _ = self.run_while_it_has_gas(|| {
             let sft_nonce = current_staking_pos.liquid_staking_nonce;
 
             transfers.push(crate::multi_transfer::EsdtTokenPayment {
@@ -68,28 +87,41 @@ pub trait StakingRewardsModule:
             callback_pos_ids.push(BoxedBytes::from(&pos_id.to_be_bytes()[..]));
 
             if current_staking_pos.next_pos_id == 0 {
-                break;
+                return LoopOp::Break;
             }
 
             pos_id = current_staking_pos.next_pos_id;
             current_staking_pos = self.staking_position(pos_id).get();
+
+            LoopOp::Continue
+        })?;
+
+        self.save_progress(&OngoingOperationType::ClaimStakingRewards {
+            pos_id,
+            callback_executed: false,
+        });
+
+        if !transfers.is_empty() {
+            // TODO: Use SC proxy instead of manual call
+            let delegation_sc_address = self.delegation_sc_address().get();
+            self.multi_transfer_via_async_call(
+                &delegation_sc_address,
+                &transfers,
+                &DELEGATION_CLAIM_REWARDS_ENDPOINT.into(),
+                &[],
+                &b"claim_staking_rewards_callback"[..].into(),
+                &callback_pos_ids,
+            );
         }
 
-        // TODO: Use SC proxy instead of manual call
-        let delegation_sc_address = self.delegation_sc_address().get();
-        self.multi_transfer_via_async_call(
-            &delegation_sc_address,
-            &transfers,
-            &DELEGATION_CLAIM_REWARDS_ENDPOINT.into(),
-            &[],
-            &b"claim_staking_rewards_callback"[..].into(),
-            &callback_pos_ids,
-        );
+        Ok(())
     }
 
     // TODO: Convert EGLD to WrapedEgld first (DEX does not convert EGLD directly)
     #[endpoint(convertStakingTokenToStablecoin)]
     fn convert_staking_token_to_stablecoin(&self) -> SCResult<AsyncCall<Self::SendApi>> {
+        self.require_no_ongoing_operation()?;
+
         let current_epoch = self.blockchain().get_block_epoch();
         let last_claim_epoch = self.last_staking_rewards_claim_epoch().get();
         require!(
@@ -108,6 +140,8 @@ pub trait StakingRewardsModule:
         let staking_token_id = self.staked_token_id().get();
         let staking_token_balance = self.blockchain().get_sc_balance(&staking_token_id, 0);
         let stablecoin_token_id = self.stablecoin_token_id().get();
+
+        self.save_progress(&OngoingOperationType::ConvertStakingTokenToStablecoin);
 
         Ok(self
             .dex_proxy(dex_sc_address)
@@ -129,12 +163,26 @@ pub trait StakingRewardsModule:
         &self,
         #[call_result] result: AsyncCallResult<()>,
         #[var_args] pos_ids: VarArgs<u64>,
-    ) {
+    ) -> SCResult<OperationCompletionStatus> {
         match result {
             AsyncCallResult::Ok(()) => {
+                let last_pos_id = match self.load_operation() {
+                    OngoingOperationType::ClaimStakingRewards {
+                        pos_id,
+                        callback_executed: _,
+                    } => {
+                        self.save_progress(&OngoingOperationType::ClaimStakingRewards {
+                            pos_id,
+                            callback_executed: true,
+                        });
+                        pos_id
+                    }
+                    _ => return sc_error!("Invalid operation in callback"),
+                };
+
                 let new_liquid_staking_tokens = self.get_all_esdt_transfers();
                 if new_liquid_staking_tokens.len() != pos_ids.len() {
-                    return;
+                    return sc_error!("Invalid old and new liquid staking position lengths");
                 }
 
                 // update liquid staking token nonces
@@ -150,8 +198,16 @@ pub trait StakingRewardsModule:
 
                 let current_epoch = self.blockchain().get_block_epoch();
                 self.last_staking_rewards_claim_epoch().set(&current_epoch);
+
+                let last_valid_id = self.last_valid_staking_position_id().get();
+                if last_pos_id == last_valid_id {
+                    self.clear_operation();
+                    Ok(OperationCompletionStatus::Completed)
+                } else {
+                    Ok(OperationCompletionStatus::InterruptedBeforeOutOfGas)
+                }
             }
-            AsyncCallResult::Err(_) => {}
+            AsyncCallResult::Err(err) => Err(SCError::from(err.err_msg)),
         }
     }
 
@@ -173,6 +229,8 @@ pub trait StakingRewardsModule:
         self.last_staking_token_convert_epoch().set(&current_epoch);
         self.stablecoin_reserves()
             .update(|stablecoin_reserves| *stablecoin_reserves += payment_amount);
+
+        self.clear_operation();
 
         Ok(())
     }

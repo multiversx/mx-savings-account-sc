@@ -20,8 +20,9 @@ pub trait TokensModule {
         &self,
         #[payment_amount] payment_amount: Self::BigUint,
         token_name: BoxedBytes,
-    ) -> AsyncCall<Self::SendApi> {
-        self.issue_token(payment_amount, token_name, LEND_TOKEN_TICKER.into())
+    ) -> SCResult<AsyncCall<Self::SendApi>> {
+        require!(self.lend_token_id().is_empty(), "Lend token already issued");
+        Ok(self.issue_token(payment_amount, token_name, LEND_TOKEN_TICKER.into()))
     }
 
     #[only_owner]
@@ -31,8 +32,12 @@ pub trait TokensModule {
         &self,
         #[payment_amount] payment_amount: Self::BigUint,
         token_name: BoxedBytes,
-    ) -> AsyncCall<Self::SendApi> {
-        self.issue_token(payment_amount, token_name, BORROW_TOKEN_TICKER.into())
+    ) -> SCResult<AsyncCall<Self::SendApi>> {
+        require!(
+            self.borrow_token_id().is_empty(),
+            "Borrow token already issued"
+        );
+        Ok(self.issue_token(payment_amount, token_name, BORROW_TOKEN_TICKER.into()))
     }
 
     #[only_owner]
