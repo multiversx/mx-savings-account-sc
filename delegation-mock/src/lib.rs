@@ -20,29 +20,47 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
 
     #[payable("EGLD")]
     #[endpoint]
-    fn stake(&self) {}
+    fn stake(&self, #[payment_amount] payment_amount: Self::BigUint) -> SCResult<()> {
+        require!(payment_amount > 0, "Must pay more than 0 EGLD");
+
+        let liquid_staking_token_id = self.liquid_staking_token_id().get();
+        let sft_nonce = self.create_liquid_staking_sft(&liquid_staking_token_id, &payment_amount);
+
+        let caller = self.blockchain().get_caller();
+        self.send().direct(
+            &caller,
+            &liquid_staking_token_id,
+            sft_nonce,
+            &payment_amount,
+            &[],
+        );
+
+        Ok(())
+    }
 
     #[payable("*")]
     #[endpoint(claimRewards)]
     fn claim_rewards(&self) -> SCResult<()> {
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         let transfers = self.get_all_esdt_transfers();
+
         let mut new_tokens = Vec::new();
+        let mut total_amount = Self::BigUint::zero();
         for transfer in transfers {
             require!(
                 transfer.token_name == liquid_staking_token_id,
                 "Invalid token"
             );
 
-            let new_nonce = self.send().esdt_nft_create(
+            self.send().esdt_local_burn(
                 &liquid_staking_token_id,
+                transfer.token_nonce,
                 &transfer.amount,
-                &BoxedBytes::empty(),
-                &Self::BigUint::zero(),
-                &BoxedBytes::empty(),
-                &(),
-                &[BoxedBytes::empty()],
             );
+            let new_nonce =
+                self.create_liquid_staking_sft(&liquid_staking_token_id, &transfer.amount);
+
+            total_amount += &transfer.amount;
             new_tokens.push(EsdtTokenPayment {
                 token_name: transfer.token_name,
                 token_nonce: new_nonce,
@@ -51,7 +69,10 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
             })
         }
 
+        let rewards_amount = total_amount / 10u64.into();
         let caller = self.blockchain().get_caller();
+        self.send()
+            .direct(&caller, &TokenIdentifier::egld(), 0, &rewards_amount, &[]);
         self.multi_transfer_via_async_call(
             &caller,
             &new_tokens,
@@ -60,6 +81,18 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
             &BoxedBytes::empty(),
             &[],
         );
+    }
+
+    fn create_liquid_staking_sft(&self, token_id: &TokenIdentifier, amount: &Self::BigUint) -> u64 {
+        self.send().esdt_nft_create(
+            token_id,
+            amount,
+            &BoxedBytes::empty(),
+            &Self::BigUint::zero(),
+            &BoxedBytes::empty(),
+            &(),
+            &[BoxedBytes::empty()],
+        )
     }
 
     #[storage_mapper("liquidStakingTokenId")]

@@ -1,0 +1,227 @@
+{
+    "name": "delegation deploy",
+    "steps": [
+        {
+            "step": "setState",
+            "accounts": {
+                "address:delegation-owner": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "storage": {}
+                },
+                "address:staker": {
+                    "nonce": "0",
+                    "balance": "1,000,000",
+                    "storage": {}
+                }
+            },
+            "newAddresses": [
+                {
+                    "creatorAddress": "address:delegation-owner",
+                    "creatorNonce": "0",
+                    "newAddress": "sc:delegation"
+                }
+            ]
+        },
+        {
+            "step": "scDeploy",
+            "txId": "deploy",
+            "tx": {
+                "from": "address:delegation-owner",
+                "contractCode": "file:../output/delegation-mock.wasm",
+                "value": "0",
+                "arguments": [
+                    "str:LIQ-123456"
+                ],
+                "gasLimit": "10,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "sc:delegation": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "storage": {
+                        "str:liquidStakingTokenId": "str:LIQ-123456"
+                    },
+                    "code": "file:../output/delegation-mock.wasm"
+                },
+                "+": {}
+            }
+        },
+        {
+            "step": "setState",
+            "accounts": {
+                "sc:delegation": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:LIQ-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ]
+                        }
+                    },
+                    "storage": {
+                        "str:liquidStakingTokenId": "str:LIQ-123456"
+                    },
+                    "code": "file:../output/delegation-mock.wasm"
+                }
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "stake-1",
+            "tx": {
+                "from": "address:staker",
+                "to": "sc:delegation",
+                "value": "250,000",
+                "function": "stake",
+                "arguments": [],
+                "gasLimit": "10,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "1"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "stake-2",
+            "tx": {
+                "from": "address:staker",
+                "to": "sc:delegation",
+                "value": "250,000",
+                "function": "stake",
+                "arguments": [],
+                "gasLimit": "10,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "2"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "stake-3",
+            "tx": {
+                "from": "address:staker",
+                "to": "sc:delegation",
+                "value": "250,000",
+                "function": "stake",
+                "arguments": [],
+                "gasLimit": "10,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "3"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "stake-4",
+            "tx": {
+                "from": "address:staker",
+                "to": "sc:delegation",
+                "value": "250,000",
+                "function": "stake",
+                "arguments": [],
+                "gasLimit": "10,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "4"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "address:staker": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:LIQ-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "250,000",
+                                    "creator": "sc:delegation"
+                                },
+                                {
+                                    "nonce": "2",
+                                    "balance": "250,000",
+                                    "creator": "sc:delegation"
+                                },
+                                {
+                                    "nonce": "3",
+                                    "balance": "250,000",
+                                    "creator": "sc:delegation"
+                                },
+                                {
+                                    "nonce": "4",
+                                    "balance": "250,000",
+                                    "creator": "sc:delegation"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "sc:delegation": {
+                    "nonce": "0",
+                    "balance": "1,000,000",
+                    "esdt": {
+                        "str:LIQ-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "4"
+                        }
+                    },
+                    "storage": {
+                        "str:liquidStakingTokenId": "str:LIQ-123456"
+                    },
+                    "code": "file:../output/delegation-mock.wasm"
+                },
+                "+": {}
+            }
+        }
+    ]
+}
