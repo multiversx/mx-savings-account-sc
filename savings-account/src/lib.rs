@@ -34,11 +34,12 @@ pub trait SavingsAccount:
         delegation_sc_address: Address,
         dex_swap_sc_address: Address,
         price_aggregator_address: Address,
+        loan_to_value_percentage: Self::BigUint,
+        lender_rewards_percentage_per_epoch: Self::BigUint,
         base_borrow_rate: Self::BigUint,
         borrow_rate_under_opt_factor: Self::BigUint,
         borrow_rate_over_opt_factor: Self::BigUint,
         optimal_utilisation: Self::BigUint,
-        reserve_factor: Self::BigUint,
     ) -> SCResult<()> {
         require!(
             stablecoin_token_id.is_valid_esdt_identifier(),
@@ -75,12 +76,16 @@ pub trait SavingsAccount:
         self.price_aggregator_address()
             .set(&price_aggregator_address);
 
+        self.loan_to_value_percentage()
+            .set(&loan_to_value_percentage);
+        self.lender_rewards_percentage_per_epoch()
+            .set(&lender_rewards_percentage_per_epoch);
+
         let pool_params = PoolParams {
             base_borrow_rate,
             borrow_rate_under_opt_factor,
             borrow_rate_over_opt_factor,
             optimal_utilisation,
-            reserve_factor,
         };
         self.pool_params().set(&pool_params);
 
@@ -150,37 +155,29 @@ pub trait SavingsAccount:
             "May only use liquid staking position as collateral"
         );
 
-        let stablecoin_token_id = self.stablecoin_token_id().get();
-        let stablecoin_reserves = self.stablecoin_reserves().get();
-        let borrowed_amount = self.borrowed_amount().get();
-
-        let pool_params = self.pool_params().get();
-        let current_utilisation =
-            self.compute_capital_utilisation(&borrowed_amount, &stablecoin_reserves);
-        let borrow_rate = self.compute_borrow_rate(
-            &pool_params.base_borrow_rate,
-            &pool_params.borrow_rate_under_opt_factor,
-            &pool_params.borrow_rate_over_opt_factor,
-            &pool_params.optimal_utilisation,
-            &current_utilisation,
-        );
-
         let staked_token_value_in_dollars = self.get_staked_token_value_in_dollars()?;
         let staking_position_value =
             self.compute_staking_position_value(&staked_token_value_in_dollars, &payment_amount);
-        let borrow_value = self.compute_borrow_amount(&borrow_rate, &staking_position_value);
+
+        let loan_to_value_percentage = self.loan_to_value_percentage().get();
+        let borrow_value =
+            self.compute_borrow_amount(&loan_to_value_percentage, &staking_position_value);
 
         require!(borrow_value > 0, "Deposit amount too low");
-
-        let sc_stablecoin_balance = self.blockchain().get_sc_balance(&stablecoin_token_id, 0);
-        require!(
-            borrow_value <= sc_stablecoin_balance,
-            "Not have enough funds to lend"
-        );
 
         let borrow_token_id = self.borrow_token_id().get();
         let borrow_token_nonce = self.create_tokens(&borrow_token_id, &payment_amount)?;
         let staking_pos_id = self.add_staking_position(payment_nonce);
+
+        let lended_amount = self.lended_amount().get();
+        self.borrowed_amount().update(|total_borrowed| {
+            *total_borrowed += &borrow_value;
+            require!(
+                *total_borrowed <= lended_amount,
+                "Not have enough funds to lend"
+            );
+            Ok(())
+        })?;
 
         self.borrow_metadata(borrow_token_nonce)
             .set(&BorrowMetadata {
@@ -188,10 +185,9 @@ pub trait SavingsAccount:
                 staking_position_id: staking_pos_id,
                 borrow_epoch: self.blockchain().get_block_epoch(),
             });
-        self.borrowed_amount()
-            .update(|total| *total += &borrow_value);
 
         let caller = self.blockchain().get_caller();
+        let stablecoin_token_id = self.stablecoin_token_id().get();
         self.send().direct(
             &caller,
             &borrow_token_id,
@@ -380,6 +376,12 @@ pub trait SavingsAccount:
         );
 
         let mut lend_metadata = self.lend_metadata(payment_nonce).get();
+        let last_calculate_rewards_epoch = self.last_calculate_rewards_epoch().get();
+        require!(
+            lend_metadata.lend_epoch < last_calculate_rewards_epoch,
+            "No rewards to claim"
+        );
+
         self.update_lend_metadata(&mut lend_metadata, payment_nonce, &payment_amount);
 
         // burn old sfts
@@ -388,7 +390,7 @@ pub trait SavingsAccount:
         // create sfts
         let new_sft_nonce = self.create_tokens(&lend_token_id, &payment_amount)?;
         self.lend_metadata(new_sft_nonce).set(&LendMetadata {
-            lend_epoch: self.last_calculate_rewards_epoch().get(),
+            lend_epoch: last_calculate_rewards_epoch,
             amount_in_circulation: payment_amount.clone(),
         });
 

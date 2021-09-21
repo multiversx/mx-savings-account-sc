@@ -36,7 +36,7 @@ pub trait DexMock {
             &token_out,
             &amount_out,
             self.blockchain().get_gas_left(),
-            &opt_accept_funds_func
+            opt_accept_funds_func
                 .into_option()
                 .unwrap_or_else(BoxedBytes::empty)
                 .as_slice(),

@@ -1,0 +1,142 @@
+{
+    "name": "lend",
+    "steps": [
+        {
+            "step": "externalSteps",
+            "path": "init.scen.json"
+        },
+        {
+            "step": "setState",
+            "currentBlockInfo": {
+                "blockEpoch": "20"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "lender1-lend",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:STABLE-123456",
+                    "value": "1,000,000"
+                },
+                "function": "lend",
+                "arguments": [],
+                "gasLimit": "30,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "1"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "address:lender1": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:LEND-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "1,000,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        }
+                    },
+                    "storage": {}
+                },
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "1,000,000",
+                        "str:LEND-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "1"
+                        },
+                        "str:BORROW-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ]
+                        }
+                    },
+                    "storage": {
+                        "str:lendMetadata|u64:1": {
+                            "1-lend_epoch": "u64:20",
+                            "2-amount_in_circulation": "biguint:1,000,000"
+                        },
+                        "str:lendedAmount": "1,000,000",
+                        "+": ""
+                    },
+                    "owner": "address:owner",
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "lender1-try-claim-rewards",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:LEND-123456",
+                    "nonce": "1",
+                    "value": "1,000,000"
+                },
+                "function": "lenderClaimRewards",
+                "arguments": [],
+                "gasLimit": "30,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "4",
+                "message": "str:No rewards to claim",
+                "out": [],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "try-claim-staking-rewards-no-positions",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "function": "claimStakingRewards",
+                "arguments": [],
+                "gasLimit": "30,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "4",
+                "message": "str:No staking positions available",
+                "out": [],
+                "gas": "*",
+                "refund": "*"
+            }
+        }
+    ]
+}

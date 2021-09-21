@@ -114,7 +114,7 @@ pub trait TokensModule {
             &Self::BigUint::zero(),
             &BoxedBytes::empty(),
             &(),
-            &[],
+            &[BoxedBytes::empty()],
         );
 
         Ok(sft_nonce)

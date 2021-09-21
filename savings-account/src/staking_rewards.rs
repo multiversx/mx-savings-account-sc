@@ -39,9 +39,7 @@ pub trait StakingRewardsModule:
     + crate::tokens::TokensModule
 {
     // endpoints
-
-    // TODO: Ongoing operation pattern
-    // TODO: Pause SC while this operation is in progress
+    
     #[endpoint(claimStakingRewards)]
     fn claim_staking_rewards(&self) -> SCResult<()> {
         let current_epoch = self.blockchain().get_block_epoch();

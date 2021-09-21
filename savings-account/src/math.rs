@@ -28,19 +28,6 @@ pub trait MathModule {
         }
     }
 
-    fn compute_deposit_rate(
-        &self,
-        u_current: &Self::BigUint,
-        borrow_rate: &Self::BigUint,
-        reserve_factor: &Self::BigUint,
-    ) -> Self::BigUint {
-        let bp = Self::BigUint::from(BASE_PRECISION);
-        let loan_ratio = u_current * borrow_rate;
-        let deposit_rate = u_current * &loan_ratio * (&bp - reserve_factor);
-
-        deposit_rate / (&bp * &bp * bp)
-    }
-
     fn compute_capital_utilisation(
         &self,
         borrowed_amount: &Self::BigUint,
