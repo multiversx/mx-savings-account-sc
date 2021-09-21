@@ -6,6 +6,7 @@ use crate::ongoing_operation::{
 };
 
 const DELEGATION_CLAIM_REWARDS_ENDPOINT: &[u8] = b"claimRewards";
+const RECEIVE_STAKING_REWARDS_FUNC_NAME: &[u8] = b"receiveStakingRewards";
 
 mod dex_proxy {
     elrond_wasm::imports!();
@@ -27,9 +28,9 @@ mod dex_proxy {
 
 #[derive(TypeAbi, TopEncode, TopDecode)]
 pub struct StakingPosition {
-    pub liquid_staking_nonce: u64,
     pub prev_pos_id: u64,
     pub next_pos_id: u64,
+    pub liquid_staking_nonce: u64,
 }
 
 #[elrond_wasm::module]
@@ -39,7 +40,7 @@ pub trait StakingRewardsModule:
     + crate::tokens::TokensModule
 {
     // endpoints
-    
+
     #[endpoint(claimStakingRewards)]
     fn claim_staking_rewards(&self) -> SCResult<()> {
         let current_epoch = self.blockchain().get_block_epoch();
@@ -106,7 +107,7 @@ pub trait StakingRewardsModule:
                 &delegation_sc_address,
                 &transfers,
                 &DELEGATION_CLAIM_REWARDS_ENDPOINT.into(),
-                &[],
+                &[RECEIVE_STAKING_REWARDS_FUNC_NAME.into()],
                 &b"claim_staking_rewards_callback"[..].into(),
                 &callback_pos_ids,
             );
@@ -209,6 +210,18 @@ pub trait StakingRewardsModule:
         }
     }
 
+    #[payable("*")]
+    #[endpoint(receiveStakingRewards)]
+    fn receive_staking_rewards(&self) -> SCResult<()> {
+        let caller = self.blockchain().get_caller();
+        let delegation_sc_address = self.delegation_sc_address().get();
+        require!(
+            caller == delegation_sc_address,
+            "Only the Delegation SC may call this function"
+        );
+        Ok(())
+    }
+
     // Technically, this is not a callback, but its use is simply updating storage after DEX Swap
     #[payable("*")]
     #[endpoint]
@@ -262,9 +275,9 @@ pub trait StakingRewardsModule:
         self.staking_position(prev_last_id)
             .update(|last_pos| last_pos.next_pos_id = new_last_id);
         self.staking_position(new_last_id).set(&StakingPosition {
-            liquid_staking_nonce,
             next_pos_id: 0,
             prev_pos_id: prev_last_id,
+            liquid_staking_nonce,
         });
 
         self.staking_position_nonce_to_id(liquid_staking_nonce)

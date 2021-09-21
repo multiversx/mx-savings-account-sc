@@ -11,8 +11,8 @@
                 "to": "sc:price_aggregator",
                 "function": "latestPriceFeedOptional",
                 "arguments": [
-                    "str:GWEI",
-                    "str:BRIDGE"
+                    "str:EGLD",
+                    "str:USD"
                 ]
             },
             "expect": {
@@ -20,9 +20,9 @@
                 "message": "",
                 "out": [
                     "1",
-                    "str:GWEI",
-                    "str:BRIDGE",
-                    "10",
+                    "str:EGLD",
+                    "str:USD",
+                    "100",
                     "0"
                 ]
             }
@@ -36,8 +36,8 @@
                 "value": "0",
                 "function": "latestPriceFeedOptional",
                 "arguments": [
-                    "str:GWEI",
-                    "str:BRIDGE"
+                    "str:EGLD",
+                    "str:USD"
                 ],
                 "gasLimit": "40,000,000",
                 "gasPrice": "0"
@@ -45,9 +45,9 @@
             "expect": {
                 "out": [
                     "1",
-                    "str:GWEI",
-                    "str:BRIDGE",
-                    "10",
+                    "str:EGLD",
+                    "str:USD",
+                    "100",
                     "0"
                 ],
                 "status": "0",

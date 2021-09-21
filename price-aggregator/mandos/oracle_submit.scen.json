@@ -14,9 +14,9 @@
                 "value": "0",
                 "function": "submit",
                 "arguments": [
-                    "str:GWEI",
-                    "str:BRIDGE",
-                    "10"
+                    "str:EGLD",
+                    "str:USD",
+                    "100"
                 ],
                 "gasLimit": "40,000,000",
                 "gasPrice": "0"

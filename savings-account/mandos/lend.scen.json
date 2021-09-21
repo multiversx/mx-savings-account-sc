@@ -137,6 +137,98 @@
                 "gas": "*",
                 "refund": "*"
             }
+        },
+        {
+            "step": "setState",
+            "currentBlockInfo": {
+                "blockEpoch": "25"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "lender2-lend",
+            "tx": {
+                "from": "address:lender2",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:STABLE-123456",
+                    "value": "500,000"
+                },
+                "function": "lend",
+                "arguments": [],
+                "gasLimit": "30,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "2"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "address:lender2": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "500,000",
+                        "str:LEND-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "2",
+                                    "balance": "500,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        }
+                    },
+                    "storage": {}
+                },
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "1,500,000",
+                        "str:LEND-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "2"
+                        },
+                        "str:BORROW-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ]
+                        }
+                    },
+                    "storage": {
+                        "str:lendMetadata|u64:1": {
+                            "1-lend_epoch": "u64:20",
+                            "2-amount_in_circulation": "biguint:1,000,000"
+                        },
+                        "str:lendMetadata|u64:2": {
+                            "1-lend_epoch": "u64:25",
+                            "2-amount_in_circulation": "biguint:500,000"
+                        },
+                        "str:lendedAmount": "1,500,000",
+                        "+": ""
+                    },
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
         }
     ]
 }

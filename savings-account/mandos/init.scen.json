@@ -67,12 +67,12 @@
                     "sc:delegation",
                     "sc:dex",
                     "sc:price_aggregator",
-                    "75,000,000,000",
+                    "750,000,000",
+                    "5,000,000",
                     "500,000,000",
-                    "50,000,000,000",
-                    "10,000,000,000",
-                    "10,000,000,000",
-                    "75,000,000,000"
+                    "100,000,000",
+                    "100,000,000",
+                    "750,000,000"
                 ],
                 "gasLimit": "50,000,000",
                 "gasPrice": "0"
@@ -100,13 +100,13 @@
                         "str:lastStakingRewardsClaimEpoch": "10",
                         "str:stakingPosition|u64:0": "u64:0|u64:0|u64:0",
                         "str:poolParams": {
-                            "1-base_borrow_rate": "biguint:50,000,000,000",
-                            "2-borrow_rate_under_opt_factor": "biguint:10,000,000,000",
-                            "3-borrow_rate_over_opt_factor": "biguint:10,000,000,000",
-                            "4-optimal_utilisation": "biguint:75,000,000,000"
+                            "1-base_borrow_rate": "biguint:500,000,000",
+                            "2-borrow_rate_under_opt_factor": "biguint:100,000,000",
+                            "3-borrow_rate_over_opt_factor": "biguint:100,000,000",
+                            "4-optimal_utilisation": "biguint:750,000,000"
                         },
-                        "str:loadToValuePercentage": "75,000,000,000",
-                        "str:lenderRewardsPercentagePerEpoch": "500,000,000"
+                        "str:loadToValuePercentage": "750,000,000",
+                        "str:lenderRewardsPercentagePerEpoch": "5,000,000"
                     },
                     "code": "file:../output/savings-account.wasm"
                 },
@@ -151,13 +151,13 @@
                         "str:lastStakingRewardsClaimEpoch": "10",
                         "str:stakingPosition|u64:0": "u64:0|u64:0|u64:0",
                         "str:poolParams": {
-                            "1-base_borrow_rate": "biguint:50,000,000,000",
-                            "2-borrow_rate_under_opt_factor": "biguint:10,000,000,000",
-                            "3-borrow_rate_over_opt_factor": "biguint:10,000,000,000",
-                            "4-optimal_utilisation": "biguint:75,000,000,000"
+                            "1-base_borrow_rate": "biguint:500,000,000",
+                            "2-borrow_rate_under_opt_factor": "biguint:100,000,000",
+                            "3-borrow_rate_over_opt_factor": "biguint:100,000,000",
+                            "4-optimal_utilisation": "biguint:750,000,000"
                         },
-                        "str:loadToValuePercentage": "75,000,000,000",
-                        "str:lenderRewardsPercentagePerEpoch": "500,000,000",
+                        "str:loadToValuePercentage": "750,000,000",
+                        "str:lenderRewardsPercentagePerEpoch": "5,000,000",
 
                         "str:lendTokenId": "str:LEND-123456",
                         "str:borrowTokenId": "str:BORROW-123456"
