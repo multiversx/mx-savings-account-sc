@@ -244,7 +244,6 @@
                             "2-next_pos_id": "u64:0",
                             "3-liquid_staking_nonce": "u64:4"
                         },
-                        
 
                         "+": ""
                     },

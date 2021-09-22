@@ -439,28 +439,31 @@ pub trait SavingsAccount:
         );
         let mut total_rewards = Self::BigUint::zero();
 
-        let run_result = self.run_while_it_has_gas(|| {
-            // TODO: Use something like a SetMapper or a custom mapper that will hold valid nonces
-            // There's no point in iterating over all the nonces and checking for empty over and over
-            if !self.lend_metadata(current_lend_nonce).is_empty() {
-                let metadata = self.lend_metadata(current_lend_nonce).get();
-                let reward_amount = self.compute_reward_amount(
-                    &metadata.amount_in_circulation,
-                    metadata.lend_epoch,
-                    last_calculate_rewards_epoch,
-                    &reward_percentage_per_epoch,
-                );
+        let run_result = self.run_while_it_has_gas(
+            || {
+                // TODO: Use something like a SetMapper or a custom mapper that will hold valid nonces
+                // There's no point in iterating over all the nonces and checking for empty over and over
+                if !self.lend_metadata(current_lend_nonce).is_empty() {
+                    let metadata = self.lend_metadata(current_lend_nonce).get();
+                    let reward_amount = self.compute_reward_amount(
+                        &metadata.amount_in_circulation,
+                        metadata.lend_epoch,
+                        last_calculate_rewards_epoch,
+                        &reward_percentage_per_epoch,
+                    );
 
-                total_rewards += reward_amount;
-            }
+                    total_rewards += reward_amount;
+                }
 
-            current_lend_nonce += 1;
-            if current_lend_nonce > last_lend_nonce {
-                LoopOp::Break
-            } else {
-                LoopOp::Continue
-            }
-        })?;
+                current_lend_nonce += 1;
+                if current_lend_nonce > last_lend_nonce {
+                    LoopOp::Break
+                } else {
+                    LoopOp::Continue
+                }
+            },
+            None,
+        )?;
 
         match run_result {
             OperationCompletionStatus::Completed => {

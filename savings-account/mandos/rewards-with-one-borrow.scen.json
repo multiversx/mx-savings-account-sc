@@ -1,0 +1,35 @@
+{
+    "name": "lender rewards with just one borrower",
+    "steps": [
+        {
+            "step": "externalSteps",
+            "path": "borrow.scen.json"
+        },
+        {
+            "step": "setState",
+            "currentBlockInfo": {
+                "blockEpoch": "40"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "claim-staking-rewards",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "function": "claimStakingRewards",
+                "arguments": [],
+                "gasLimit": "500,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [],
+                "gas": "*",
+                "refund": "*"
+            }
+        }
+    ]
+}

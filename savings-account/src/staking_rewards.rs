@@ -8,6 +8,8 @@ use crate::ongoing_operation::{
 const DELEGATION_CLAIM_REWARDS_ENDPOINT: &[u8] = b"claimRewards";
 const RECEIVE_STAKING_REWARDS_FUNC_NAME: &[u8] = b"receiveStakingRewards";
 
+const STAKING_REWARDS_CLAIM_GAS_PER_TOKEN: u64 = 10_000_000;
+
 mod dex_proxy {
     elrond_wasm::imports!();
 
@@ -72,28 +74,31 @@ pub trait StakingRewardsModule:
         let mut transfers = Vec::new();
         let mut callback_pos_ids = Vec::new();
 
-        let _ = self.run_while_it_has_gas(|| {
-            let sft_nonce = current_staking_pos.liquid_staking_nonce;
+        let _ = self.run_while_it_has_gas(
+            || {
+                let sft_nonce = current_staking_pos.liquid_staking_nonce;
 
-            transfers.push(crate::multi_transfer::EsdtTokenPayment {
-                token_name: liquid_staking_token_id.clone(),
-                token_nonce: sft_nonce,
-                amount: self
-                    .blockchain()
-                    .get_sc_balance(&liquid_staking_token_id, sft_nonce),
-                token_type: EsdtTokenType::SemiFungible,
-            });
-            callback_pos_ids.push(BoxedBytes::from(&pos_id.to_be_bytes()[..]));
+                transfers.push(crate::multi_transfer::EsdtTokenPayment {
+                    token_name: liquid_staking_token_id.clone(),
+                    token_nonce: sft_nonce,
+                    amount: self
+                        .blockchain()
+                        .get_sc_balance(&liquid_staking_token_id, sft_nonce),
+                    token_type: EsdtTokenType::SemiFungible,
+                });
+                callback_pos_ids.push(BoxedBytes::from(&pos_id.to_be_bytes()[..]));
 
-            if current_staking_pos.next_pos_id == 0 {
-                return LoopOp::Break;
-            }
+                if current_staking_pos.next_pos_id == 0 {
+                    return LoopOp::Break;
+                }
 
-            pos_id = current_staking_pos.next_pos_id;
-            current_staking_pos = self.staking_position(pos_id).get();
+                pos_id = current_staking_pos.next_pos_id;
+                current_staking_pos = self.staking_position(pos_id).get();
 
-            LoopOp::Continue
-        })?;
+                LoopOp::Continue
+            },
+            Some(STAKING_REWARDS_CLAIM_GAS_PER_TOKEN),
+        )?;
 
         self.save_progress(&OngoingOperationType::ClaimStakingRewards {
             pos_id,
@@ -154,17 +159,15 @@ pub trait StakingRewardsModule:
             .async_call())
     }
 
-    // callbacks
-
     #[payable("*")]
     #[callback]
     fn claim_staking_rewards_callback(
         &self,
-        #[call_result] result: AsyncCallResult<()>,
-        #[var_args] pos_ids: VarArgs<u64>,
+        #[call_result] result: AsyncCallResult<VarArgs<u64>>,
+        pos_ids: VarArgs<u64>,
     ) -> SCResult<OperationCompletionStatus> {
         match result {
-            AsyncCallResult::Ok(()) => {
+            AsyncCallResult::Ok(_) => {
                 let last_pos_id = match self.load_operation() {
                     OngoingOperationType::ClaimStakingRewards {
                         pos_id,
