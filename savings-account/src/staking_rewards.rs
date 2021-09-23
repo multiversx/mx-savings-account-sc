@@ -1,8 +1,11 @@
 elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
-use crate::ongoing_operation::{
-    LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
+use crate::{
+    multi_transfer::{EsdtTokenPayment, MultiTransferAsync},
+    ongoing_operation::{
+        LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
+    },
 };
 
 const DELEGATION_CLAIM_REWARDS_ENDPOINT: &[u8] = b"claimRewards";
@@ -44,7 +47,7 @@ pub trait StakingRewardsModule:
     // endpoints
 
     #[endpoint(claimStakingRewards)]
-    fn claim_staking_rewards(&self) -> SCResult<()> {
+    fn claim_staking_rewards(&self) -> SCResult<OptionalResult<MultiTransferAsync<Self::SendApi>>> {
         let current_epoch = self.blockchain().get_block_epoch();
         let last_claim_epoch = self.last_staking_rewards_claim_epoch().get();
         require!(
@@ -107,18 +110,23 @@ pub trait StakingRewardsModule:
 
         if !transfers.is_empty() {
             // TODO: Use SC proxy instead of manual call
-            let delegation_sc_address = self.delegation_sc_address().get();
-            self.multi_transfer_via_async_call(
-                &delegation_sc_address,
-                &transfers,
-                &DELEGATION_CLAIM_REWARDS_ENDPOINT.into(),
-                &[RECEIVE_STAKING_REWARDS_FUNC_NAME.into()],
-                &b"claim_staking_rewards_callback"[..].into(),
-                &callback_pos_ids,
+            let mut async_call = MultiTransferAsync::new(
+                self.send(),
+                self.delegation_sc_address().get(),
+                DELEGATION_CLAIM_REWARDS_ENDPOINT,
+                transfers,
             );
-        }
+            async_call.add_endpoint_arg(&RECEIVE_STAKING_REWARDS_FUNC_NAME);
 
-        Ok(())
+            async_call.add_callback(b"claim_staking_rewards_callback");
+            for cb_pos in callback_pos_ids {
+                async_call.add_callback_arg(&cb_pos);
+            }
+
+            Ok(OptionalResult::Some(async_call))
+        } else {
+            Ok(OptionalResult::None)
+        }
     }
 
     // TODO: Convert EGLD to WrapedEgld first (DEX does not convert EGLD directly)
@@ -163,11 +171,20 @@ pub trait StakingRewardsModule:
     #[callback]
     fn claim_staking_rewards_callback(
         &self,
-        #[call_result] result: AsyncCallResult<VarArgs<u64>>,
+        #[call_result] result: AsyncCallResult<VarArgs<BoxedBytes>>,
         pos_ids: VarArgs<u64>,
     ) -> SCResult<OperationCompletionStatus> {
         match result {
-            AsyncCallResult::Ok(_) => {
+            AsyncCallResult::Ok(raw_results) => {
+                // TODO: Revert change and go back to using the payments returned from API
+
+                // the first N - 1 results are the nonces of the minted SFTs
+                // we only care about the last arg, which is the Vec of payments
+                let nr_results = raw_results.len();
+                let new_liquid_staking_tokens = Vec::<EsdtTokenPayment<Self::BigUint>>::top_decode(
+                    raw_results.into_vec()[nr_results - 1].as_slice(),
+                )?;
+
                 let last_pos_id = match self.load_operation() {
                     OngoingOperationType::ClaimStakingRewards {
                         pos_id,
@@ -182,7 +199,7 @@ pub trait StakingRewardsModule:
                     _ => return sc_error!("Invalid operation in callback"),
                 };
 
-                let new_liquid_staking_tokens = self.get_all_esdt_transfers();
+                // let new_liquid_staking_tokens = self.get_all_esdt_transfers();
                 if new_liquid_staking_tokens.len() != pos_ids.len() {
                     return sc_error!("Invalid old and new liquid staking position lengths");
                 }

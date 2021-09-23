@@ -1,6 +1,6 @@
 #![no_std]
 
-use savings_account::multi_transfer::EsdtTokenPayment;
+use savings_account::multi_transfer::{EsdtTokenPayment, MultiTransferAsync};
 
 elrond_wasm::imports!();
 
@@ -43,7 +43,9 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
     fn claim_rewards(
         &self,
         #[var_args] opt_receive_funds_func: OptionalArg<BoxedBytes>,
-    ) -> SCResult<()> {
+    ) -> SCResult<
+        MultiResult2<Vec<EsdtTokenPayment<Self::BigUint>>, MultiTransferAsync<Self::SendApi>>,
+    > {
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         let transfers = self.get_all_esdt_transfers();
 
@@ -80,9 +82,8 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
                 self.send()
                     .direct(&caller, &TokenIdentifier::egld(), 0, &rewards_amount, &[])
             }
-            OptionalArg::Some(func_name) => self.send().direct_esdt_execute(
+            OptionalArg::Some(func_name) => self.send().direct_egld_execute(
                 &caller,
-                &TokenIdentifier::egld(),
                 &rewards_amount,
                 self.blockchain().get_gas_left() / 4,
                 func_name.as_slice(),
@@ -90,14 +91,8 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
             )?,
         }
 
-        self.multi_transfer_via_async_call(
-            &caller,
-            &new_tokens,
-            &BoxedBytes::empty(),
-            &[],
-            &BoxedBytes::empty(),
-            &[],
-        );
+        let async_call = MultiTransferAsync::new(self.send(), caller, &[], new_tokens.clone());
+        Ok((new_tokens, async_call).into())
     }
 
     fn create_liquid_staking_sft(&self, token_id: &TokenIdentifier, amount: &Self::BigUint) -> u64 {
