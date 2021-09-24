@@ -3,6 +3,8 @@
 elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
+const EGLD_DECIMALS: u64 = 1_000_000_000_000_000_000;
+
 #[derive(TopEncode, TopDecode, NestedEncode, NestedDecode, PartialEq, TypeAbi, Clone)]
 pub struct FftTokenAmountPair<BigUint: BigUintApi> {
     pub token_id: TokenIdentifier,
@@ -29,7 +31,7 @@ pub trait DexMock {
         #[var_args] opt_accept_funds_func: OptionalArg<BoxedBytes>,
     ) -> FftTokenAmountPair<Self::BigUint> {
         let caller = self.blockchain().get_caller();
-        let amount_out = amount_in * 10u64.into();
+        let amount_out = amount_in * 100u64.into() / EGLD_DECIMALS.into();
 
         let _ = self.send().direct_esdt_execute(
             &caller,

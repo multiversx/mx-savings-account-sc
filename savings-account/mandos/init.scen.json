@@ -25,7 +25,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "1,000,000"
+                        "str:STABLE-123456": "100,000"
                     },
                     "storage": {}
                 },
@@ -33,7 +33,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "1,000,000"
+                        "str:STABLE-123456": "100,000"
                     },
                     "storage": {}
                 }

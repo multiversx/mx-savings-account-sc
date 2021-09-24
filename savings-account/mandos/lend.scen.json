@@ -20,7 +20,7 @@
                 "value": "0",
                 "esdt": {
                     "tokenIdentifier": "str:STABLE-123456",
-                    "value": "1,000,000"
+                    "value": "100,000"
                 },
                 "function": "lend",
                 "arguments": [],
@@ -48,7 +48,7 @@
                             "instances": [
                                 {
                                     "nonce": "1",
-                                    "balance": "1,000,000",
+                                    "balance": "100,000",
                                     "creator": "sc:savings_account"
                                 }
                             ]
@@ -60,7 +60,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "1,000,000",
+                        "str:STABLE-123456": "100,000",
                         "str:LEND-123456": {
                             "balance": "0",
                             "roles": [
@@ -82,9 +82,9 @@
                     "storage": {
                         "str:lendMetadata|u64:1": {
                             "1-lend_epoch": "u64:20",
-                            "2-amount_in_circulation": "biguint:1,000,000"
+                            "2-amount_in_circulation": "biguint:100,000"
                         },
-                        "str:lendedAmount": "1,000,000",
+                        "str:lendedAmount": "100,000",
                         "+": ""
                     },
                     "owner": "address:owner",
@@ -103,7 +103,7 @@
                 "esdt": {
                     "tokenIdentifier": "str:LEND-123456",
                     "nonce": "1",
-                    "value": "1,000,000"
+                    "value": "100,000"
                 },
                 "function": "lenderClaimRewards",
                 "arguments": [],
@@ -141,7 +141,7 @@
         {
             "step": "setState",
             "currentBlockInfo": {
-                "blockEpoch": "25"
+                "blockEpoch": "21"
             }
         },
         {
@@ -153,7 +153,7 @@
                 "value": "0",
                 "esdt": {
                     "tokenIdentifier": "str:STABLE-123456",
-                    "value": "500,000"
+                    "value": "50,000"
                 },
                 "function": "lend",
                 "arguments": [],
@@ -177,12 +177,12 @@
                     "nonce": "*",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "500,000",
+                        "str:STABLE-123456": "50,000",
                         "str:LEND-123456": {
                             "instances": [
                                 {
                                     "nonce": "2",
-                                    "balance": "500,000",
+                                    "balance": "50,000",
                                     "creator": "sc:savings_account"
                                 }
                             ]
@@ -194,7 +194,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "1,500,000",
+                        "str:STABLE-123456": "150,000",
                         "str:LEND-123456": {
                             "balance": "0",
                             "roles": [
@@ -216,13 +216,13 @@
                     "storage": {
                         "str:lendMetadata|u64:1": {
                             "1-lend_epoch": "u64:20",
-                            "2-amount_in_circulation": "biguint:1,000,000"
+                            "2-amount_in_circulation": "biguint:100,000"
                         },
                         "str:lendMetadata|u64:2": {
-                            "1-lend_epoch": "u64:25",
-                            "2-amount_in_circulation": "biguint:500,000"
+                            "1-lend_epoch": "u64:21",
+                            "2-amount_in_circulation": "biguint:50,000"
                         },
-                        "str:lendedAmount": "1,500,000",
+                        "str:lendedAmount": "150,000",
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"

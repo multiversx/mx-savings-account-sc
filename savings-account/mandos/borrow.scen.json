@@ -8,7 +8,7 @@
         {
             "step": "setState",
             "currentBlockInfo": {
-                "blockEpoch": "30"
+                "blockEpoch": "25"
             }
         },
         {
@@ -85,7 +85,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "1,481,250",
+                        "str:STABLE-123456": "131,250",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -115,19 +115,11 @@
                         }
                     },
                     "storage": {
-                        "str:lendMetadata|u64:1": {
-                            "1-lend_epoch": "u64:20",
-                            "2-amount_in_circulation": "biguint:1,000,000"
-                        },
-                        "str:lendMetadata|u64:2": {
-                            "1-lend_epoch": "u64:25",
-                            "2-amount_in_circulation": "biguint:500,000"
-                        },
-                        "str:lendedAmount": "1,500,000",
+                        "str:lendedAmount": "150,000",
 
                         "str:borrowMetadata|u64:1": {
                             "1-staking_position_id": "u64:1",
-                            "2-borrow_epoch": "u64:30",
+                            "2-borrow_epoch": "u64:25",
                             "3-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowedAmount": "18,750",
