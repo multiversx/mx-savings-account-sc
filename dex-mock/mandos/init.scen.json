@@ -8,7 +8,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "1,000,000"
+                        "str:STABLE-123456": "1,000,000,000,000,000,000,000"
                     },
                     "storage": {}
                 }
@@ -48,7 +48,7 @@
                 "value": "0",
                 "esdt": {
                     "tokenIdentifier": "str:STABLE-123456",
-                    "value": "1,000,000"
+                    "value": "1,000,000,000,000,000,000,000"
                 },
                 "function": "deposit",
                 "arguments": [],
@@ -70,7 +70,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "1,000,000"
+                        "str:STABLE-123456": "1,000,000,000,000,000,000,000"
                     },
                     "storage": {},
                     "code": "file:../output/dex-mock.wasm"

@@ -64,9 +64,7 @@ pub trait StakingRewardsModule:
                 pos_id,
                 callback_executed,
             } => {
-                if !callback_executed {
-                    return sc_error!(CALLBACK_IN_PROGRESS_ERR_MSG);
-                }
+                require!(callback_executed, CALLBACK_IN_PROGRESS_ERR_MSG);
 
                 self.staking_position(pos_id).get()
             }
@@ -129,44 +127,6 @@ pub trait StakingRewardsModule:
         }
     }
 
-    // TODO: Convert EGLD to WrapedEgld first (DEX does not convert EGLD directly)
-    #[endpoint(convertStakingTokenToStablecoin)]
-    fn convert_staking_token_to_stablecoin(&self) -> SCResult<AsyncCall<Self::SendApi>> {
-        self.require_no_ongoing_operation()?;
-
-        let current_epoch = self.blockchain().get_block_epoch();
-        let last_claim_epoch = self.last_staking_rewards_claim_epoch().get();
-        require!(
-            last_claim_epoch == current_epoch,
-            "Must claim rewards for this epoch first"
-        );
-
-        let last_staking_token_convert_epoch = self.last_staking_token_convert_epoch().get();
-        require!(
-            current_epoch > last_staking_token_convert_epoch,
-            "Already converted to stablecoins this epoch"
-        );
-
-        let dex_sc_address = self.dex_swap_sc_address().get();
-
-        let staking_token_id = self.staked_token_id().get();
-        let staking_token_balance = self.blockchain().get_sc_balance(&staking_token_id, 0);
-        let stablecoin_token_id = self.stablecoin_token_id().get();
-
-        self.save_progress(&OngoingOperationType::ConvertStakingTokenToStablecoin);
-
-        Ok(self
-            .dex_proxy(dex_sc_address)
-            .swap_tokens_fixed_input(
-                staking_token_id,
-                staking_token_balance,
-                stablecoin_token_id,
-                Self::BigUint::zero(),
-                OptionalArg::Some(b"convert_staking_token_to_stablecoin_callback"[..].into()),
-            )
-            .async_call())
-    }
-
     #[payable("*")]
     #[callback]
     fn claim_staking_rewards_callback(
@@ -200,9 +160,10 @@ pub trait StakingRewardsModule:
                 };
 
                 // let new_liquid_staking_tokens = self.get_all_esdt_transfers();
-                if new_liquid_staking_tokens.len() != pos_ids.len() {
-                    return sc_error!("Invalid old and new liquid staking position lengths");
-                }
+                require!(
+                    new_liquid_staking_tokens.len() == pos_ids.len(),
+                    "Invalid old and new liquid staking position lengths"
+                );
 
                 // update liquid staking token nonces
                 // needed to know which liquid staking SFT to return on repay
@@ -240,6 +201,44 @@ pub trait StakingRewardsModule:
             "Only the Delegation SC may call this function"
         );
         Ok(())
+    }
+
+    // TODO: Convert EGLD to WrapedEgld first (DEX does not convert EGLD directly)
+    #[endpoint(convertStakingTokenToStablecoin)]
+    fn convert_staking_token_to_stablecoin(&self) -> SCResult<AsyncCall<Self::SendApi>> {
+        self.require_no_ongoing_operation()?;
+
+        let current_epoch = self.blockchain().get_block_epoch();
+        let last_claim_epoch = self.last_staking_rewards_claim_epoch().get();
+        require!(
+            last_claim_epoch == current_epoch,
+            "Must claim rewards for this epoch first"
+        );
+
+        let last_staking_token_convert_epoch = self.last_staking_token_convert_epoch().get();
+        require!(
+            current_epoch > last_staking_token_convert_epoch,
+            "Already converted to stablecoins this epoch"
+        );
+
+        let dex_sc_address = self.dex_swap_sc_address().get();
+
+        let staking_token_id = self.staked_token_id().get();
+        let staking_token_balance = self.blockchain().get_sc_balance(&staking_token_id, 0);
+        let stablecoin_token_id = self.stablecoin_token_id().get();
+
+        self.save_progress(&OngoingOperationType::ConvertStakingTokenToStablecoin);
+
+        Ok(self
+            .dex_proxy(dex_sc_address)
+            .swap_tokens_fixed_input(
+                staking_token_id,
+                staking_token_balance,
+                stablecoin_token_id,
+                Self::BigUint::zero(),
+                OptionalArg::Some(b"convert_staking_token_to_stablecoin_callback"[..].into()),
+            )
+            .async_call())
     }
 
     // Technically, this is not a callback, but its use is simply updating storage after DEX Swap

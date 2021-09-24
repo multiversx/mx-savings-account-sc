@@ -382,8 +382,6 @@ pub trait SavingsAccount:
             "No rewards to claim"
         );
 
-        self.update_lend_metadata(&mut lend_metadata, payment_nonce, &payment_amount);
-
         // burn old sfts
         self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount)?;
 
@@ -403,6 +401,8 @@ pub trait SavingsAccount:
         let rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
         self.unclaimed_rewards()
             .update(|unclaimed_rewards| *unclaimed_rewards -= &rewards_amount);
+
+        self.update_lend_metadata(&mut lend_metadata, payment_nonce, &payment_amount);
 
         let stablecoin_token_id = self.stablecoin_token_id().get();
         self.send()
@@ -437,6 +437,7 @@ pub trait SavingsAccount:
             &self.blockchain().get_sc_address(),
             &self.lend_token_id().get(),
         );
+        let current_epoch = self.blockchain().get_block_epoch();
         let mut total_rewards = Self::BigUint::zero();
 
         let run_result = self.run_while_it_has_gas(
@@ -448,7 +449,7 @@ pub trait SavingsAccount:
                     let reward_amount = self.compute_reward_amount(
                         &metadata.amount_in_circulation,
                         metadata.lend_epoch,
-                        last_calculate_rewards_epoch,
+                        current_epoch,
                         &reward_percentage_per_epoch,
                     );
 

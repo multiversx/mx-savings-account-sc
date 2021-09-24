@@ -79,23 +79,6 @@
                         }
                     },
                     "storage": {
-                        "str:lendMetadata|u64:1": {
-                            "1-lend_epoch": "u64:20",
-                            "2-amount_in_circulation": "biguint:1,000,000"
-                        },
-                        "str:lendMetadata|u64:2": {
-                            "1-lend_epoch": "u64:25",
-                            "2-amount_in_circulation": "biguint:500,000"
-                        },
-                        "str:lendedAmount": "1,500,000",
-
-                        "str:borrowMetadata|u64:1": {
-                            "1-staking_position_id": "u64:1",
-                            "2-borrow_epoch": "u64:30",
-                            "3-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
-                        "str:borrowedAmount": "18,750",
-
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",
                             "2-next_pos_id": "u64:1",
@@ -107,7 +90,539 @@
                             "3-liquid_staking_nonce": "u64:5"
                         },
 
+                        "str:lastStakingRewardsClaimEpoch": "40",
                         "str:currentOngoingOperation": "",
+                        
+                        "+": ""
+                    },
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "try-calculate-rewards-before-converting",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "function": "calculateTotalLenderRewards",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "4",
+                "message": "str:Must claim staking rewards and convert to stablecoin for this epoch first",
+                "out": [],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "convert-staking-rewards-to-stablecoins",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "function": "convertStakingTokenToStablecoin",
+                "arguments": [],
+                "gasLimit": "500,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    {
+                        "1-token_out": "nested:str:STABLE-123456",
+                        "2-amount_out": "biguint:250,000,000,000,000,000,000"
+                    }
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "250,000,000,000,001,481,250",
+                        "str:LIQ-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "5",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                }
+                            ]
+                        },
+                        "str:LEND-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "2"
+                        },
+                        "str:BORROW-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "1"
+                        }
+                    },
+                    "storage": {
+                        "str:stakingPosition|u64:0": {
+                            "1-prev_pos_id": "u64:0",
+                            "2-next_pos_id": "u64:1",
+                            "3-liquid_staking_nonce": "u64:0"
+                        },
+                        "str:stakingPosition|u64:1": {
+                            "1-prev_pos_id": "u64:0",
+                            "2-next_pos_id": "u64:0",
+                            "3-liquid_staking_nonce": "u64:5"
+                        },
+
+                        "str:lastStakingRewardsClaimEpoch": "40",
+                        "str:lastStakingTokenConvertEpoch": "40",
+                        "str:currentOngoingOperation": "",
+
+                        "str:stablecoinReserves": "250,000,000,000,000,000,000",
+                        
+                        "+": ""
+                    },
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "calculate-lender-rewards",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "function": "calculateTotalLenderRewards",
+                "arguments": [],
+                "gasLimit": "500,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "str:completed"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "250,000,000,000,001,481,250",
+                        "str:LIQ-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "5",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                }
+                            ]
+                        },
+                        "str:LEND-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "2"
+                        },
+                        "str:BORROW-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "1"
+                        }
+                    },
+                    "storage": {
+                        "str:stakingPosition|u64:0": {
+                            "1-prev_pos_id": "u64:0",
+                            "2-next_pos_id": "u64:1",
+                            "3-liquid_staking_nonce": "u64:0"
+                        },
+                        "str:stakingPosition|u64:1": {
+                            "1-prev_pos_id": "u64:0",
+                            "2-next_pos_id": "u64:0",
+                            "3-liquid_staking_nonce": "u64:5"
+                        },
+
+                        "str:lastStakingRewardsClaimEpoch": "40",
+                        "str:lastStakingTokenConvertEpoch": "40",
+                        "str:lastCalculateRewardsEpoch": "40",
+                        "str:currentOngoingOperation": "",
+
+                        "str:unclaimedRewards": "137,500",
+                        "str:stablecoinReserves": "249,999,999,999,999,862,500",
+                        
+                        "+": ""
+                    },
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
+        },
+        {
+            "step": "scQuery",
+            "txId": "get-lender-claimable-rewards-1",
+            "tx": {
+                "to": "sc:savings_account",
+                "function": "getLenderClaimableRewards",
+                "arguments": [
+                    "1",
+                    "1,000,000"
+                ]
+            },
+            "expect": {
+                "out": [
+                    "100,000"
+                ]
+            }
+        },
+        {
+            "step": "scQuery",
+            "txId": "get-lender-claimable-rewards-2",
+            "tx": {
+                "to": "sc:savings_account",
+                "function": "getLenderClaimableRewards",
+                "arguments": [
+                    "2",
+                    "500,000"
+                ]
+            },
+            "expect": {
+                "out": [
+                    "37,500"
+                ]
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "claim-lender-rewards-1-first-half",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:LEND-123456",
+                    "nonce": "1",
+                    "value": "500,000"
+                },
+                "function": "lenderClaimRewards",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "3"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "address:lender1": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "50,000",
+                        "str:LEND-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "500,000",
+                                    "creator": "sc:savings_account"
+                                },
+                                {
+                                    "nonce": "3",
+                                    "balance": "500,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        }
+                    },
+                    "storage": {}
+                },
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "250,000,000,000,001,431,250",
+                        "str:LIQ-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "5",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                }
+                            ]
+                        },
+                        "str:LEND-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "3"
+                        },
+                        "str:BORROW-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "1"
+                        }
+                    },
+                    "storage": {
+                        "str:lendMetadata|u64:1": {
+                            "1-lend_epoch": "u64:20",
+                            "2-amount_in_circulation": "biguint:500,000"
+                        },
+                        "str:lendMetadata|u64:2": {
+                            "1-lend_epoch": "u64:25",
+                            "2-amount_in_circulation": "biguint:500,000"
+                        },
+                        "str:lendMetadata|u64:3": {
+                            "1-lend_epoch": "u64:40",
+                            "2-amount_in_circulation": "biguint:500,000"
+                        },
+                        "str:lendedAmount": "1,500,000",
+
+                        "str:unclaimedRewards": "87,500",
+                        "str:stablecoinReserves": "249,999,999,999,999,862,500",
+                        
+                        "+": ""
+                    },
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
+        },
+        {
+            "step": "setState",
+            "currentBlockInfo": {
+                "blockEpoch": "50"
+            }
+        },
+        {
+            "step": "scQuery",
+            "txId": "get-lender-claimable-rewards-after-half-claim",
+            "tx": {
+                "to": "sc:savings_account",
+                "function": "getLenderClaimableRewards",
+                "arguments": [
+                    "1",
+                    "500,000"
+                ]
+            },
+            "expect": {
+                "out": [
+                    "50,000"
+                ]
+            }
+        },
+        {
+            "step": "scQuery",
+            "txId": "get-lender-claimable-rewards-after-half-claim-new-sft",
+            "tx": {
+                "to": "sc:savings_account",
+                "function": "getLenderClaimableRewards",
+                "arguments": [
+                    "3",
+                    "500,000"
+                ]
+            },
+            "expect": {
+                "out": [
+                    "0"
+                ]
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "claim-lender-rewards-1-second-half",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:LEND-123456",
+                    "nonce": "1",
+                    "value": "500,000"
+                },
+                "function": "lenderClaimRewards",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "4"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "claim-lender-rewards-2",
+            "tx": {
+                "from": "address:lender2",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:LEND-123456",
+                    "nonce": "2",
+                    "value": "500,000"
+                },
+                "function": "lenderClaimRewards",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "5"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "address:lender1": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "100,000",
+                        "str:LEND-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "3",
+                                    "balance": "500,000",
+                                    "creator": "sc:savings_account"
+                                },
+                                {
+                                    "nonce": "4",
+                                    "balance": "500,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        }
+                    },
+                    "storage": {}
+                },
+                "address:lender2": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "537,500",
+                        "str:LEND-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "5",
+                                    "balance": "500,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        }
+                    },
+                    "storage": {}
+                },
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "250,000,000,000,001,343,750",
+                        "str:LIQ-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "5",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                }
+                            ]
+                        },
+                        "str:LEND-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "5"
+                        },
+                        "str:BORROW-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "1"
+                        }
+                    },
+                    "storage": {
+                        "str:lendMetadata|u64:1": "",
+                        "str:lendMetadata|u64:2": "",
+                        "str:lendMetadata|u64:3": {
+                            "1-lend_epoch": "u64:40",
+                            "2-amount_in_circulation": "biguint:500,000"
+                        },
+                        "str:lendMetadata|u64:4": {
+                            "1-lend_epoch": "u64:40",
+                            "2-amount_in_circulation": "biguint:500,000"
+                        },
+                        "str:lendMetadata|u64:5": {
+                            "1-lend_epoch": "u64:40",
+                            "2-amount_in_circulation": "biguint:500,000"
+                        },
+                        "str:lendedAmount": "1,500,000",
+
+                        "str:unclaimedRewards": "0",
+                        "str:stablecoinReserves": "249,999,999,999,999,862,500",
                         
                         "+": ""
                     },

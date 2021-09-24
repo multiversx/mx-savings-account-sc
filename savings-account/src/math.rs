@@ -77,7 +77,7 @@ pub trait MathModule {
         last_calculate_rewards_epoch: u64,
         reward_percentage_per_epoch: &Self::BigUint,
     ) -> Self::BigUint {
-        if lend_epoch > last_calculate_rewards_epoch {
+        if lend_epoch >= last_calculate_rewards_epoch {
             return Self::BigUint::zero();
         }
 
