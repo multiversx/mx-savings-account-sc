@@ -264,7 +264,7 @@ pub trait SavingsAccount:
             "Not enough stablecoins paid to cover the debt"
         );
 
-        // even if the value changed between borrow and repay time,
+        // even if the value of the staked token changed between borrow and repay time,
         // we still need to map the repaid value to the initial value at borrow time,
         // this is done to keep the borrowed_amount valid
         let borrow_amount_repaid = self.compute_staking_position_value(
