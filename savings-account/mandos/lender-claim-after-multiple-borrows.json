@@ -1,34 +1,68 @@
 {
-    "name": "rewards with multiple borrows, all in one call (no ongoing operations)",
+    "name": "common steps for rewards-one-call and rewards-multiple-calls",
     "steps": [
-        {
-            "step": "externalSteps",
-            "path": "more-borrows.scen.json"
-        },
         {
             "step": "setState",
             "currentBlockInfo": {
-                "blockEpoch": "25"
+                "blockEpoch": "50"
+            }
+        },
+        {
+            "step": "scQuery",
+            "txId": "get-lender-claimable-rewards-1",
+            "tx": {
+                "to": "sc:savings_account",
+                "function": "getLenderClaimableRewards",
+                "arguments": [
+                    "1",
+                    "100,000"
+                ]
+            },
+            "expect": {
+                "out": [
+                    "2,500"
+                ]
+            }
+        },
+        {
+            "step": "scQuery",
+            "txId": "get-lender-claimable-rewards-2",
+            "tx": {
+                "to": "sc:savings_account",
+                "function": "getLenderClaimableRewards",
+                "arguments": [
+                    "2",
+                    "50,000"
+                ]
+            },
+            "expect": {
+                "out": [
+                    "1,000"
+                ]
             }
         },
         {
             "step": "scCall",
-            "txId": "claim-staking-rewards",
+            "txId": "claim-lender-rewards-1",
             "tx": {
                 "from": "address:lender1",
                 "to": "sc:savings_account",
                 "value": "0",
-                "function": "claimStakingRewards",
+                "esdt": {
+                    "tokenIdentifier": "str:LEND-123456",
+                    "nonce": "1",
+                    "value": "100,000"
+                },
+                "function": "lenderClaimRewards",
                 "arguments": [],
-                "gasLimit": "500,000,000",
+                "gasLimit": "50,000,000",
                 "gasPrice": "0"
             },
             "expect": {
                 "status": "0",
                 "message": "",
                 "out": [
-                    "5", "6", "7", "8",
-                    "str:completed"
+                    "3"
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -36,46 +70,26 @@
         },
         {
             "step": "scCall",
-            "txId": "convert-staking-rewards-to-stablecoins",
+            "txId": "claim-lender-rewards-2",
             "tx": {
-                "from": "address:lender1",
+                "from": "address:lender2",
                 "to": "sc:savings_account",
                 "value": "0",
-                "function": "convertStakingTokenToStablecoin",
+                "esdt": {
+                    "tokenIdentifier": "str:LEND-123456",
+                    "nonce": "2",
+                    "value": "50,000"
+                },
+                "function": "lenderClaimRewards",
                 "arguments": [],
-                "gasLimit": "100,000,000",
+                "gasLimit": "50,000,000",
                 "gasPrice": "0"
             },
             "expect": {
                 "status": "0",
                 "message": "",
                 "out": [
-                    {
-                        "1-token_out": "nested:str:STABLE-123456",
-                        "2-amount_out": "biguint:10,000"
-                    }
-                ],
-                "gas": "*",
-                "refund": "*"
-            }
-        },
-        {
-            "step": "scCall",
-            "txId": "calculate-lender-rewards",
-            "tx": {
-                "from": "address:lender1",
-                "to": "sc:savings_account",
-                "value": "0",
-                "function": "calculateTotalLenderRewards",
-                "arguments": [],
-                "gasLimit": "500,000,000",
-                "gasPrice": "0"
-            },
-            "expect": {
-                "status": "0",
-                "message": "",
-                "out": [
-                    "str:completed"
+                    "4"
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -84,11 +98,45 @@
         {
             "step": "checkState",
             "accounts": {
+                "address:lender1": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "2,500",
+                        "str:LEND-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "3",
+                                    "balance": "100,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        }
+                    },
+                    "storage": {}
+                },
+                "address:lender2": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "51,000",
+                        "str:LEND-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "4",
+                                    "balance": "50,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        }
+                    },
+                    "storage": {}
+                },
                 "sc:savings_account": {
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "85,000",
+                        "str:STABLE-123456": "81,500",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -120,7 +168,7 @@
                                 "ESDTRoleNFTAddQuantity",
                                 "ESDTRoleNFTBurn"
                             ],
-                            "lastNonce": "2"
+                            "lastNonce": "4"
                         },
                         "str:BORROW-123456": {
                             "balance": "0",
@@ -133,12 +181,14 @@
                         }
                     },
                     "storage": {
-                        "str:lendMetadata|u64:1": {
-                            "1-lend_epoch": "u64:20",
+                        "str:lendMetadata|u64:1": "",
+                        "str:lendMetadata|u64:2": "",
+                        "str:lendMetadata|u64:3": {
+                            "1-lend_epoch": "u64:25",
                             "2-amount_in_circulation": "biguint:100,000"
                         },
-                        "str:lendMetadata|u64:2": {
-                            "1-lend_epoch": "u64:21",
+                        "str:lendMetadata|u64:4": {
+                            "1-lend_epoch": "u64:25",
                             "2-amount_in_circulation": "biguint:50,000"
                         },
                         "str:lendedAmount": "150,000",
@@ -191,7 +241,11 @@
                             "3-liquid_staking_nonce": "u64:8"
                         },
 
-                        "str:unclaimedRewards": "3,500",
+                        "str:lastStakingRewardsClaimEpoch": "25",
+                        "str:lastStakingTokenConvertEpoch": "25",
+                        "str:lastCalculateRewardsEpoch": "25",
+
+                        "str:unclaimedRewards": "0",
                         "str:stablecoinReserves": "6,500",
 
                         "+": ""
@@ -200,10 +254,6 @@
                 },
                 "+": {}
             }
-        },
-        {
-            "step": "externalSteps",
-            "path": "lender-claim-after-multiple-borrows.json"
         }
     ]
 }

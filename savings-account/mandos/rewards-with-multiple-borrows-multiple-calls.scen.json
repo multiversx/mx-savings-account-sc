@@ -349,7 +349,7 @@
         },
         {
             "step": "scCall",
-            "txId": "calculate-lender-rewards-1",
+            "txId": "calculate-lender-rewards-2",
             "tx": {
                 "from": "address:lender1",
                 "to": "sc:savings_account",
@@ -490,6 +490,10 @@
                 },
                 "+": {}
             }
+        },
+        {
+            "step": "externalSteps",
+            "path": "lender-claim-after-multiple-borrows.json"
         }
     ]
 }
