@@ -269,7 +269,7 @@ pub trait SavingsAccount:
         // this is done to keep the borrowed_amount valid
         let borrow_amount_repaid = self.compute_staking_position_value(
             &borrow_metadata.staked_token_value_in_dollars_at_borrow,
-            &borrow_token_amount,
+            borrow_token_amount,
         );
         self.borrowed_amount()
             .update(|borrowed_amount| *borrowed_amount -= &borrow_amount_repaid);

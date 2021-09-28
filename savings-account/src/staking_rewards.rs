@@ -239,7 +239,7 @@ pub trait StakingRewardsModule:
             )
             .async_call()
             .with_callback(
-                <Self as StakingRewardsModule>::callbacks(&self)
+                <Self as StakingRewardsModule>::callbacks(self)
                     .convert_staking_token_to_stablecoin_callback(),
             ))
     }
