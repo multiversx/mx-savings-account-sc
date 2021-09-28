@@ -2,7 +2,7 @@ elrond_wasm::imports!();
 
 const BASE_PRECISION: u32 = 1_000_000_000; // Could be reduced maybe? Since we're working with epochs instead of seconds
 const DEFAULT_DECIMALS: u64 = 1_000_000_000_000_000_000; // most tokens have 10^18 decimals. TODO: Add as configurable value
-const EPOCHS_IN_YEAR: u32 = 355;
+const EPOCHS_IN_YEAR: u32 = 365;
 
 #[elrond_wasm::module]
 pub trait MathModule {

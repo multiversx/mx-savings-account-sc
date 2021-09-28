@@ -19,5 +19,6 @@ pub struct LendMetadata<BigUint: BigUintApi> {
 pub struct BorrowMetadata<BigUint: BigUintApi> {
     pub staking_position_id: u64,
     pub borrow_epoch: u64,
+    pub staked_token_value_in_dollars_at_borrow: BigUint,
     pub amount_in_circulation: BigUint,
 }

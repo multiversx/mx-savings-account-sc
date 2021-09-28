@@ -180,9 +180,10 @@ pub trait SavingsAccount:
 
         self.borrow_metadata(borrow_token_nonce)
             .set(&BorrowMetadata {
-                amount_in_circulation: payment_amount.clone(),
                 staking_position_id: staking_pos_id,
                 borrow_epoch: self.blockchain().get_block_epoch(),
+                staked_token_value_in_dollars_at_borrow: staked_token_value_in_dollars,
+                amount_in_circulation: payment_amount.clone(),
             });
 
         let caller = self.blockchain().get_caller();
@@ -235,9 +236,9 @@ pub trait SavingsAccount:
         );
 
         let borrowed_amount = self.borrowed_amount().get();
-        let stablecoin_reserves = self.stablecoin_reserves().get();
+        let lended_amount = self.lended_amount().get();
         let current_utilisation =
-            self.compute_capital_utilisation(&borrowed_amount, &stablecoin_reserves);
+            self.compute_capital_utilisation(&borrowed_amount, &lended_amount);
 
         let pool_params = self.pool_params().get();
         let borrow_rate = self.compute_borrow_rate(
@@ -249,22 +250,36 @@ pub trait SavingsAccount:
         );
 
         let staked_token_value_in_dollars = self.get_staked_token_value_in_dollars()?;
-        let staking_position_value = self
+        let staking_position_current_value = self
             .compute_staking_position_value(&staked_token_value_in_dollars, borrow_token_amount);
 
         let debt = self.compute_debt(
-            &staking_position_value,
+            &staking_position_current_value,
             borrow_metadata.borrow_epoch,
             &borrow_rate,
         );
-        let total_stablecoins_needed = staking_position_value + debt;
+        let total_stablecoins_needed = &staking_position_current_value + &debt;
         require!(
             stablecoin_amount >= &total_stablecoins_needed,
             "Not enough stablecoins paid to cover the debt"
         );
 
+        // even if the value changed between borrow and repay time,
+        // we still need to map the repaid value to the initial value at borrow time,
+        // this is done to keep the borrowed_amount valid
+        let borrow_amount_repaid = self.compute_staking_position_value(
+            &borrow_metadata.staked_token_value_in_dollars_at_borrow,
+            &borrow_token_amount,
+        );
         self.borrowed_amount()
-            .update(|borrowed_amount| *borrowed_amount -= borrow_token_amount);
+            .update(|borrowed_amount| *borrowed_amount -= &borrow_amount_repaid);
+
+        // the "debt" and any additional value paid is added to the reserves
+        if total_stablecoins_needed > borrow_amount_repaid {
+            let extra_reserves = &total_stablecoins_needed - &borrow_amount_repaid ;
+            self.stablecoin_reserves()
+                .update(|stablecoin_reserves| *stablecoin_reserves += extra_reserves);
+        }
 
         self.burn_tokens(&borrow_token_id, borrow_token_nonce, borrow_token_amount)?;
 

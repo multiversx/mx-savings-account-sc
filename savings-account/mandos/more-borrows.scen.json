@@ -190,22 +190,26 @@
                         "str:borrowMetadata|u64:1": {
                             "1-staking_position_id": "u64:1",
                             "2-borrow_epoch": "u64:25",
-                            "3-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
+                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
+                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowMetadata|u64:2": {
                             "1-staking_position_id": "u64:2",
                             "2-borrow_epoch": "u64:25",
-                            "3-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
+                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
+                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowMetadata|u64:3": {
                             "1-staking_position_id": "u64:3",
                             "2-borrow_epoch": "u64:25",
-                            "3-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
+                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
+                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowMetadata|u64:4": {
                             "1-staking_position_id": "u64:4",
                             "2-borrow_epoch": "u64:25",
-                            "3-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
+                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
+                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowedAmount": "75,000",
 

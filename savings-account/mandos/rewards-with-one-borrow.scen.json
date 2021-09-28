@@ -28,14 +28,6 @@
                 "message": "",
                 "out": [
                     "5",
-                    [
-                        {
-                            "1-token_type": "u8:2",
-                            "2-token_id": "nested:str:LIQ-123456",
-                            "3-nonce": "u64:5",
-                            "4-amount": "biguint:250,000,000,000,000,000,000"
-                        }
-                    ],
                     "str:completed"
                 ],
                 "gas": "*",

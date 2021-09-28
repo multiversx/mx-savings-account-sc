@@ -1,86 +1,102 @@
 {
-    "name": "common steps for rewards-one-call and rewards-multiple-calls",
+    "name": "borrower repay",
     "steps": [
         {
+            "step": "externalSteps",
+            "path": "rewards-with-multiple-borrows-one-call.scen.json"
+        },
+        {
             "step": "setState",
+            "comment": "one year after borrow",
             "currentBlockInfo": {
-                "blockEpoch": "50"
-            }
-        },
-        {
-            "step": "scQuery",
-            "txId": "get-lender-claimable-rewards-1",
-            "tx": {
-                "to": "sc:savings_account",
-                "function": "getLenderClaimableRewards",
-                "arguments": [
-                    "1",
-                    "100,000"
-                ]
-            },
-            "expect": {
-                "out": [
-                    "2,500"
-                ]
-            }
-        },
-        {
-            "step": "scQuery",
-            "txId": "get-lender-claimable-rewards-2",
-            "tx": {
-                "to": "sc:savings_account",
-                "function": "getLenderClaimableRewards",
-                "arguments": [
-                    "2",
-                    "50,000"
-                ]
-            },
-            "expect": {
-                "out": [
-                    "1,000"
-                ]
+                "blockEpoch": "390"
             }
         },
         {
             "step": "scCall",
-            "txId": "claim-lender-rewards-1",
+            "txId": "staker-repay-pos-1-full-wrong-payment-order",
             "tx": {
-                "from": "address:lender1",
+                "from": "address:staker",
                 "to": "sc:savings_account",
                 "value": "0",
-                "esdt": {
-                    "tokenIdentifier": "str:LEND-123456",
-                    "nonce": "1",
-                    "value": "100,000"
-                },
-                "function": "lenderClaimRewards",
+                "esdt": [
+                    {
+                        "tokenIdentifier": "str:BORROW-123456",
+                        "nonce": "1",
+                        "value": "250,000,000,000,000,000,000"
+                    },
+                    {
+                        "tokenIdentifier": "str:STABLE-123456",
+                        "nonce": "0",
+                        "value": "75,000"
+                    }
+                ],
+                "function": "repay",
                 "arguments": [],
                 "gasLimit": "50,000,000",
                 "gasPrice": "0"
             },
             "expect": {
-                "status": "0",
-                "message": "",
-                "out": [
-                    "3"
-                ],
+                "status": "4",
+                "message": "str:First transfer must be the Stablecoins",
+                "out": [],
                 "gas": "*",
                 "refund": "*"
             }
         },
         {
             "step": "scCall",
-            "txId": "claim-lender-rewards-2",
+            "txId": "staker-repay-pos-1-full-too-few-stablecoins",
             "tx": {
-                "from": "address:lender2",
+                "from": "address:staker",
                 "to": "sc:savings_account",
                 "value": "0",
-                "esdt": {
-                    "tokenIdentifier": "str:LEND-123456",
-                    "nonce": "2",
-                    "value": "50,000"
-                },
-                "function": "lenderClaimRewards",
+                "esdt": [
+                    {
+                        "tokenIdentifier": "str:STABLE-123456",
+                        "nonce": "0",
+                        "value": "10,000"
+                    },
+                    {
+                        "tokenIdentifier": "str:BORROW-123456",
+                        "nonce": "1",
+                        "value": "250,000,000,000,000,000,000"
+                    }
+                ],
+                "function": "repay",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "4",
+                "message": "str:Not enough stablecoins paid to cover the debt",
+                "out": [],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "staker-repay-pos-1-full-ok",
+            "comment": "borrow rate = 50% + 2/3 * 10% = 56,66%, which leads to 25,000 * 56,66% = 14,165 debt, so ~39,165 as total amount needed",
+            "tx": {
+                "from": "address:staker",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": [
+                    {
+                        "tokenIdentifier": "str:STABLE-123456",
+                        "nonce": "0",
+                        "value": "75,000"
+                    },
+                    {
+                        "tokenIdentifier": "str:BORROW-123456",
+                        "nonce": "1",
+                        "value": "250,000,000,000,000,000,000"
+                    }
+                ],
+                "function": "repay",
                 "arguments": [],
                 "gasLimit": "50,000,000",
                 "gasPrice": "0"
@@ -89,7 +105,11 @@
                 "status": "0",
                 "message": "",
                 "out": [
-                    "4"
+                    "1",
+                    "str:EGLD",
+                    "str:USD",
+                    "100",
+                    "0"
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -98,52 +118,48 @@
         {
             "step": "checkState",
             "accounts": {
-                "address:lender1": {
+                "address:staker": {
                     "nonce": "*",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "2,500",
-                        "str:LEND-123456": {
+                        "str:STABLE-123456": "35,834",
+                        "str:BORROW-123456": {
                             "instances": [
+                                {
+                                    "nonce": "2",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:savings_account"
+                                },
                                 {
                                     "nonce": "3",
-                                    "balance": "100,000",
+                                    "balance": "250,000,000,000,000,000,000",
                                     "creator": "sc:savings_account"
-                                }
-                            ]
-                        }
-                    },
-                    "storage": {}
-                },
-                "address:lender2": {
-                    "nonce": "*",
-                    "balance": "0",
-                    "esdt": {
-                        "str:STABLE-123456": "51,000",
-                        "str:LEND-123456": {
-                            "instances": [
+                                },
                                 {
                                     "nonce": "4",
-                                    "balance": "50,000",
+                                    "balance": "250,000,000,000,000,000,000",
                                     "creator": "sc:savings_account"
                                 }
                             ]
-                        }
-                    },
-                    "storage": {}
-                },
-                "sc:savings_account": {
-                    "nonce": "0",
-                    "balance": "0",
-                    "esdt": {
-                        "str:STABLE-123456": "81,500",
+                        },
                         "str:LIQ-123456": {
                             "instances": [
                                 {
                                     "nonce": "5",
                                     "balance": "250,000,000,000,000,000,000",
                                     "creator": "sc:delegation"
-                                },
+                                }
+                            ]
+                        }
+                    }
+                },
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "120,666",
+                        "str:LIQ-123456": {
+                            "instances": [
                                 {
                                     "nonce": "6",
                                     "balance": "250,000,000,000,000,000,000",
@@ -181,24 +197,9 @@
                         }
                     },
                     "storage": {
-                        "str:lendMetadata|u64:1": "",
-                        "str:lendMetadata|u64:2": "",
-                        "str:lendMetadata|u64:3": {
-                            "1-lend_epoch": "u64:25",
-                            "2-amount_in_circulation": "biguint:100,000"
-                        },
-                        "str:lendMetadata|u64:4": {
-                            "1-lend_epoch": "u64:25",
-                            "2-amount_in_circulation": "biguint:50,000"
-                        },
                         "str:lendedAmount": "150,000",
 
-                        "str:borrowMetadata|u64:1": {
-                            "1-staking_position_id": "u64:1",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
+                        "str:borrowMetadata|u64:1": "",
                         "str:borrowMetadata|u64:2": {
                             "1-staking_position_id": "u64:2",
                             "2-borrow_epoch": "u64:25",
@@ -217,20 +218,15 @@
                             "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
                             "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
-                        "str:borrowedAmount": "75,000",
+                        "str:borrowedAmount": "50,000",
 
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",
-                            "2-next_pos_id": "u64:1",
+                            "2-next_pos_id": "u64:2",
                             "3-liquid_staking_nonce": "u64:0"
                         },
-                        "str:stakingPosition|u64:1": {
-                            "1-prev_pos_id": "u64:0",
-                            "2-next_pos_id": "u64:2",
-                            "3-liquid_staking_nonce": "u64:5"
-                        },
                         "str:stakingPosition|u64:2": {
-                            "1-prev_pos_id": "u64:1",
+                            "1-prev_pos_id": "u64:0",
                             "2-next_pos_id": "u64:3",
                             "3-liquid_staking_nonce": "u64:6"
                         },
@@ -245,12 +241,7 @@
                             "3-liquid_staking_nonce": "u64:8"
                         },
 
-                        "str:lastStakingRewardsClaimEpoch": "25",
-                        "str:lastStakingTokenConvertEpoch": "25",
-                        "str:lastCalculateRewardsEpoch": "25",
-
-                        "str:unclaimedRewards": "0",
-                        "str:stablecoinReserves": "6,500",
+                        "str:stablecoinReserves": "20,666",
 
                         "+": ""
                     },
