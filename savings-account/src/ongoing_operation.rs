@@ -10,6 +10,7 @@ pub enum OngoingOperationType {
     None,
     CalculateTotalLenderRewards {
         lend_nonce: u64,
+        total_rewards_be_bytes: BoxedBytes,
     },
     ClaimStakingRewards {
         pos_id: u64,

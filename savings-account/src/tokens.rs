@@ -1,5 +1,7 @@
 elrond_wasm::imports!();
 
+use crate::model::{BorrowMetadata, LendMetadata};
+
 const TICKER_SEPARATOR: u8 = b'-';
 const LEND_TOKEN_TICKER: &[u8] = b"LEND";
 const BORROW_TOKEN_TICKER: &[u8] = b"BORROW";
@@ -211,4 +213,16 @@ pub trait TokensModule {
     #[view(getBorrowTokenId)]
     #[storage_mapper("borrowTokenId")]
     fn borrow_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
+
+    #[storage_mapper("lendMetadata")]
+    fn lend_metadata(
+        &self,
+        sft_nonce: u64,
+    ) -> SingleValueMapper<Self::Storage, LendMetadata<Self::BigUint>>;
+
+    #[storage_mapper("borrowMetadata")]
+    fn borrow_metadata(
+        &self,
+        sft_nonce: u64,
+    ) -> SingleValueMapper<Self::Storage, BorrowMetadata<Self::BigUint>>;
 }

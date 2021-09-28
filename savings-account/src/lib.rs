@@ -12,7 +12,6 @@ mod tokens;
 use model::*;
 use price_aggregator_proxy::*;
 
-use crate::ongoing_operation::{LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG};
 use crate::staking_rewards::StakingPosition;
 
 #[elrond_wasm::contract]
@@ -411,92 +410,6 @@ pub trait SavingsAccount:
         Ok(())
     }
 
-    #[endpoint(calculateTotalLenderRewards)]
-    fn calculate_total_lender_rewards(&self) -> SCResult<OperationCompletionStatus> {
-        let reward_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
-        let last_calculate_rewards_epoch = self.last_calculate_rewards_epoch().get();
-
-        let last_staking_token_convert_epoch = self.last_staking_token_convert_epoch().get();
-        let current_epoch = self.blockchain().get_block_epoch();
-
-        require!(
-            last_staking_token_convert_epoch == current_epoch,
-            "Must claim staking rewards and convert to stablecoin for this epoch first"
-        );
-        require!(
-            last_calculate_rewards_epoch < current_epoch,
-            "Already calculated rewards this epoch"
-        );
-
-        let mut current_lend_nonce = match self.load_operation() {
-            OngoingOperationType::None => 1u64,
-            OngoingOperationType::CalculateTotalLenderRewards { lend_nonce } => lend_nonce,
-            _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
-        };
-        let last_lend_nonce = self.blockchain().get_current_esdt_nft_nonce(
-            &self.blockchain().get_sc_address(),
-            &self.lend_token_id().get(),
-        );
-        let current_epoch = self.blockchain().get_block_epoch();
-        let mut total_rewards = Self::BigUint::zero();
-
-        let run_result = self.run_while_it_has_gas(
-            || {
-                // TODO: Use something like a SetMapper or a custom mapper that will hold valid nonces
-                // There's no point in iterating over all the nonces and checking for empty over and over
-                if !self.lend_metadata(current_lend_nonce).is_empty() {
-                    let metadata = self.lend_metadata(current_lend_nonce).get();
-                    let reward_amount = self.compute_reward_amount(
-                        &metadata.amount_in_circulation,
-                        metadata.lend_epoch,
-                        current_epoch,
-                        &reward_percentage_per_epoch,
-                    );
-
-                    total_rewards += reward_amount;
-                }
-
-                current_lend_nonce += 1;
-                if current_lend_nonce > last_lend_nonce {
-                    LoopOp::Break
-                } else {
-                    LoopOp::Continue
-                }
-            },
-            None,
-        )?;
-
-        match run_result {
-            OperationCompletionStatus::Completed => {
-                let prev_unclaimed_rewards = self.unclaimed_rewards().get();
-                let extra_unclaimed = &total_rewards - &prev_unclaimed_rewards;
-
-                // TODO: Maybe calculate by how much it's lower?
-                // For example, if 1000 is needed, but only 900 is available, that's 10% less
-                // So store this "10%" in storage and decrease everyone's rewards by 10% on lenderClaim?
-                let stablecoin_reserves = self.stablecoin_reserves().get();
-                require!(
-                    stablecoin_reserves >= extra_unclaimed,
-                    "Total rewards exceed reserves"
-                );
-
-                let current_epoch = self.blockchain().get_block_epoch();
-                self.last_calculate_rewards_epoch().set(&current_epoch);
-                self.unclaimed_rewards().set(&total_rewards);
-
-                let leftover_reserves = stablecoin_reserves - extra_unclaimed;
-                self.stablecoin_reserves().set(&leftover_reserves);
-            }
-            OperationCompletionStatus::InterruptedBeforeOutOfGas => {
-                self.save_progress(&OngoingOperationType::CalculateTotalLenderRewards {
-                    lend_nonce: current_lend_nonce,
-                });
-            }
-        };
-
-        Ok(run_result)
-    }
-
     // views
 
     #[view(getLenderClaimableRewards)]
@@ -573,12 +486,6 @@ pub trait SavingsAccount:
     #[storage_mapper("poolParams")]
     fn pool_params(&self) -> SingleValueMapper<Self::Storage, PoolParams<Self::BigUint>>;
 
-    #[view(getLenderRewardsPercentagePerEpoch)]
-    #[storage_mapper("lenderRewardsPercentagePerEpoch")]
-    fn lender_rewards_percentage_per_epoch(
-        &self,
-    ) -> SingleValueMapper<Self::Storage, Self::BigUint>;
-
     #[view(getLoadToValuePercentage)]
     #[storage_mapper("loadToValuePercentage")]
     fn loan_to_value_percentage(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
@@ -590,16 +497,4 @@ pub trait SavingsAccount:
     #[view(getBorowedAmount)]
     #[storage_mapper("borrowedAmount")]
     fn borrowed_amount(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
-
-    #[storage_mapper("lendMetadata")]
-    fn lend_metadata(
-        &self,
-        sft_nonce: u64,
-    ) -> SingleValueMapper<Self::Storage, LendMetadata<Self::BigUint>>;
-
-    #[storage_mapper("borrowMetadata")]
-    fn borrow_metadata(
-        &self,
-        sft_nonce: u64,
-    ) -> SingleValueMapper<Self::Storage, BorrowMetadata<Self::BigUint>>;
 }

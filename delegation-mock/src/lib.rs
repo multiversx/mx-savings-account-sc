@@ -43,9 +43,7 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
     fn claim_rewards(
         &self,
         #[var_args] opt_receive_funds_func: OptionalArg<BoxedBytes>,
-    ) -> SCResult<
-        MultiResult2<Vec<EsdtTokenPayment<Self::BigUint>>, MultiTransferAsync<Self::SendApi>>,
-    > {
+    ) -> SCResult<MultiTransferAsync<Self::SendApi>> {
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         let transfers = self.get_all_esdt_transfers();
 
@@ -91,8 +89,12 @@ pub trait DelegationMock: savings_account::multi_transfer::MultiTransferModule {
             )?,
         }
 
-        let async_call = MultiTransferAsync::new(self.send(), caller, &[], new_tokens.clone());
-        Ok((new_tokens, async_call).into())
+        Ok(MultiTransferAsync::new(
+            self.send(),
+            caller,
+            &[],
+            new_tokens,
+        ))
     }
 
     fn create_liquid_staking_sft(&self, token_id: &TokenIdentifier, amount: &Self::BigUint) -> u64 {
