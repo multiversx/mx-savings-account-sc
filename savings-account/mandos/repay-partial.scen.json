@@ -250,7 +250,7 @@
                     "nonce": "*",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "35,834",
+                        "str:STABLE-123456": "35,968",
                         "str:BORROW-123456": {
                             "instances": [
                                 {
@@ -285,7 +285,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "120,666",
+                        "str:STABLE-123456": "120,532",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -369,7 +369,7 @@
                             "3-liquid_staking_nonce": "u64:8"
                         },
 
-                        "str:stablecoinReserves": "20,666",
+                        "str:stablecoinReserves": "20,532",
 
                         "+": ""
                     },
