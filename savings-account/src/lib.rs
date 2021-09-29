@@ -276,7 +276,7 @@ pub trait SavingsAccount:
 
         // the "debt" and any additional value paid is added to the reserves
         if total_stablecoins_needed > borrow_amount_repaid {
-            let extra_reserves = &total_stablecoins_needed - &borrow_amount_repaid ;
+            let extra_reserves = &total_stablecoins_needed - &borrow_amount_repaid;
             self.stablecoin_reserves()
                 .update(|stablecoin_reserves| *stablecoin_reserves += extra_reserves);
         }
@@ -340,13 +340,12 @@ pub trait SavingsAccount:
         );
 
         let mut lend_metadata = self.lend_metadata(payment_nonce).get();
-        self.update_lend_metadata(&mut lend_metadata, payment_nonce, &payment_amount);
 
         let lended_amount = self.lended_amount().get();
         let borrowed_amount = self.borrowed_amount().get();
         let leftover_lend_amount = lended_amount - borrowed_amount;
         require!(
-            payment_amount >= leftover_lend_amount,
+            payment_amount <= leftover_lend_amount,
             "Cannot withdraw, not enough funds"
         );
 
@@ -358,6 +357,8 @@ pub trait SavingsAccount:
         let rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
         self.unclaimed_rewards()
             .update(|unclaimed_rewards| *unclaimed_rewards -= &rewards_amount);
+
+        self.update_lend_metadata(&mut lend_metadata, payment_nonce, &payment_amount);
 
         let total_withdraw_amount = payment_amount + rewards_amount;
         let caller = self.blockchain().get_caller();
