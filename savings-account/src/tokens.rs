@@ -5,11 +5,9 @@ use crate::model::{BorrowMetadata, LendMetadata};
 const TICKER_SEPARATOR: u8 = b'-';
 const LEND_TOKEN_TICKER: &[u8] = b"LEND";
 const BORROW_TOKEN_TICKER: &[u8] = b"BORROW";
-const REQUIRED_LOCAL_ROLES: &[EsdtLocalRole] = &[
-    EsdtLocalRole::NftCreate,
-    EsdtLocalRole::NftAddQuantity,
-    EsdtLocalRole::NftBurn,
-];
+const REQUIRED_LOCAL_ROLES: EsdtLocalRoleFlags = EsdtLocalRoleFlags::NFT_CREATE
+    | EsdtLocalRoleFlags::NFT_ADD_QUANTITY
+    | EsdtLocalRoleFlags::NFT_BURN;
 
 #[elrond_wasm::module]
 pub trait TokensModule {
@@ -20,9 +18,9 @@ pub trait TokensModule {
     #[endpoint(issueLendToken)]
     fn issue_lend_token(
         &self,
-        #[payment_amount] payment_amount: Self::BigUint,
-        token_name: BoxedBytes,
-    ) -> SCResult<AsyncCall<Self::SendApi>> {
+        #[payment_amount] payment_amount: BigUint,
+        token_name: ManagedBuffer,
+    ) -> SCResult<AsyncCall> {
         require!(self.lend_token_id().is_empty(), "Lend token already issued");
         Ok(self.issue_token(payment_amount, token_name, LEND_TOKEN_TICKER.into()))
     }
@@ -32,9 +30,9 @@ pub trait TokensModule {
     #[endpoint(issueBorrowToken)]
     fn issue_borrow_token(
         &self,
-        #[payment_amount] payment_amount: Self::BigUint,
-        token_name: BoxedBytes,
-    ) -> SCResult<AsyncCall<Self::SendApi>> {
+        #[payment_amount] payment_amount: BigUint,
+        token_name: ManagedBuffer,
+    ) -> SCResult<AsyncCall> {
         require!(
             self.borrow_token_id().is_empty(),
             "Borrow token already issued"
@@ -44,7 +42,7 @@ pub trait TokensModule {
 
     #[only_owner]
     #[endpoint(setLendTokenRoles)]
-    fn set_lend_token_roles(&self) -> SCResult<AsyncCall<Self::SendApi>> {
+    fn set_lend_token_roles(&self) -> SCResult<AsyncCall> {
         self.require_lend_token_issued()?;
 
         let lend_token_id = self.lend_token_id().get();
@@ -53,7 +51,7 @@ pub trait TokensModule {
 
     #[only_owner]
     #[endpoint(setBorrowTokenRoles)]
-    fn set_borrow_token_roles(&self) -> SCResult<AsyncCall<Self::SendApi>> {
+    fn set_borrow_token_roles(&self) -> SCResult<AsyncCall> {
         self.require_borrow_token_issued()?;
 
         let borrow_token_id = self.borrow_token_id().get();
@@ -64,11 +62,11 @@ pub trait TokensModule {
 
     fn issue_token(
         &self,
-        issue_cost: Self::BigUint,
-        token_name: BoxedBytes,
-        token_ticker: BoxedBytes,
-    ) -> AsyncCall<Self::SendApi> {
-        ESDTSystemSmartContractProxy::new_proxy_obj(self.send())
+        issue_cost: BigUint,
+        token_name: ManagedBuffer,
+        token_ticker: ManagedBuffer,
+    ) -> AsyncCall {
+        ESDTSystemSmartContractProxy::new_proxy_obj(self.raw_vm_api())
             .issue_semi_fungible(
                 issue_cost,
                 &token_name,
@@ -83,40 +81,30 @@ pub trait TokensModule {
                 },
             )
             .async_call()
-            .with_callback(self.callbacks().issue_callback())
+            .with_callback(self.callbacks().issue_callback(token_ticker))
     }
 
-    fn set_roles(&self, token_id: TokenIdentifier) -> AsyncCall<Self::SendApi> {
-        ESDTSystemSmartContractProxy::new_proxy_obj(self.send())
+    fn set_roles(&self, token_id: TokenIdentifier) -> AsyncCall {
+        ESDTSystemSmartContractProxy::new_proxy_obj(self.raw_vm_api())
             .set_special_roles(
                 &self.blockchain().get_sc_address(),
                 &token_id,
-                REQUIRED_LOCAL_ROLES,
+                REQUIRED_LOCAL_ROLES.iter_roles().cloned(),
             )
             .async_call()
     }
 
-    fn get_token_ticker(&self, token_id: &TokenIdentifier) -> BoxedBytes {
-        for (i, char) in token_id.as_esdt_identifier().iter().enumerate() {
-            if *char == TICKER_SEPARATOR {
-                return token_id.as_esdt_identifier()[..i].into();
-            }
-        }
-
-        token_id.as_name().into()
-    }
-
-    fn create_tokens(&self, token_id: &TokenIdentifier, amount: &Self::BigUint) -> SCResult<u64> {
+    fn create_tokens(&self, token_id: &TokenIdentifier, amount: &BigUint) -> SCResult<u64> {
         self.require_local_roles_set(token_id)?;
 
         let sft_nonce = self.send().esdt_nft_create(
             token_id,
             amount,
-            &BoxedBytes::empty(),
-            &Self::BigUint::zero(),
-            &BoxedBytes::empty(),
+            &ManagedBuffer::new(),
+            &BigUint::zero(),
+            &ManagedBuffer::new(),
             &(),
-            &[BoxedBytes::empty()],
+            &ManagedVec::new(),
         );
 
         Ok(sft_nonce)
@@ -126,7 +114,7 @@ pub trait TokensModule {
         &self,
         token_id: &TokenIdentifier,
         nonce: u64,
-        amount: &Self::BigUint,
+        amount: &BigUint,
     ) -> SCResult<()> {
         self.require_local_roles_set(token_id)?;
 
@@ -150,10 +138,10 @@ pub trait TokensModule {
 
     fn require_local_roles_set(&self, token_id: &TokenIdentifier) -> SCResult<()> {
         let roles = self.blockchain().get_esdt_local_roles(token_id);
-        for required_role in REQUIRED_LOCAL_ROLES {
-            require!(roles.contains(required_role), "ESDT local roles not set");
-        }
-
+        require!(
+            roles.contains(REQUIRED_LOCAL_ROLES),
+            "ESDT local roles not set"
+        );
         Ok(())
     }
 
@@ -162,19 +150,17 @@ pub trait TokensModule {
     #[callback]
     fn issue_callback(
         &self,
+        token_ticker: ManagedBuffer,
         #[call_result] result: AsyncCallResult<TokenIdentifier>,
-    ) -> OptionalResult<AsyncCall<Self::SendApi>> {
+    ) -> OptionalResult<AsyncCall> {
         match result {
             AsyncCallResult::Ok(token_id) => {
-                let ticker = self.get_token_ticker(&token_id);
-                match ticker.as_slice() {
-                    LEND_TOKEN_TICKER => {
-                        self.lend_token_id().set(&token_id);
-                    }
-                    BORROW_TOKEN_TICKER => {
-                        self.borrow_token_id().set(&token_id);
-                    }
-                    _ => return OptionalResult::None,
+                if token_ticker == ManagedBuffer::new_from_bytes(LEND_TOKEN_TICKER) {
+                    self.lend_token_id().set(&token_id);
+                } else if token_ticker == ManagedBuffer::new_from_bytes(BORROW_TOKEN_TICKER) {
+                    self.borrow_token_id().set(&token_id);
+                } else {
+                    return OptionalResult::None;
                 }
 
                 OptionalResult::Some(self.set_roles(token_id))
@@ -196,33 +182,30 @@ pub trait TokensModule {
 
     #[view(getStablecoinTokenId)]
     #[storage_mapper("stablecoinTokenId")]
-    fn stablecoin_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
+    fn stablecoin_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
 
     #[view(getLiquidStakingTokenId)]
     #[storage_mapper("liquidStakingTokenId")]
-    fn liquid_staking_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
+    fn liquid_staking_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
 
     #[view(getStakedTokenId)]
     #[storage_mapper("stakedTokenId")]
-    fn staked_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
+    fn staked_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
+
+    #[storage_mapper("tokenTicker")]
+    fn staked_token_ticker(&self) -> SingleValueMapper<ManagedBuffer>;
 
     #[view(getLendTokenId)]
     #[storage_mapper("lendTokenId")]
-    fn lend_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
+    fn lend_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
 
     #[view(getBorrowTokenId)]
     #[storage_mapper("borrowTokenId")]
-    fn borrow_token_id(&self) -> SingleValueMapper<Self::Storage, TokenIdentifier>;
+    fn borrow_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
 
     #[storage_mapper("lendMetadata")]
-    fn lend_metadata(
-        &self,
-        sft_nonce: u64,
-    ) -> SingleValueMapper<Self::Storage, LendMetadata<Self::BigUint>>;
+    fn lend_metadata(&self, sft_nonce: u64) -> SingleValueMapper<LendMetadata<Self::Api>>;
 
     #[storage_mapper("borrowMetadata")]
-    fn borrow_metadata(
-        &self,
-        sft_nonce: u64,
-    ) -> SingleValueMapper<Self::Storage, BorrowMetadata<Self::BigUint>>;
+    fn borrow_metadata(&self, sft_nonce: u64) -> SingleValueMapper<BorrowMetadata<Self::Api>>;
 }

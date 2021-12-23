@@ -4,7 +4,6 @@ elrond_wasm::imports!();
 
 mod math;
 mod model;
-pub mod multi_transfer;
 mod ongoing_operation;
 mod staking_rewards;
 mod tokens;
@@ -14,10 +13,12 @@ use price_aggregator_proxy::*;
 
 use crate::staking_rewards::StakingPosition;
 
+const REPAY_INVALID_PAYMENTS_ERR_MSG: &[u8] =
+    b"Must send exactly 2 types of tokens: Borrow SFTs and Stablecoins";
+
 #[elrond_wasm::contract]
 pub trait SavingsAccount:
     math::MathModule
-    + multi_transfer::MultiTransferModule
     + ongoing_operation::OngoingOperationModule
     + price_aggregator_proxy::PriceAggregatorModule
     + staking_rewards::StakingRewardsModule
@@ -30,15 +31,16 @@ pub trait SavingsAccount:
         stablecoin_token_id: TokenIdentifier,
         liquid_staking_token_id: TokenIdentifier,
         staked_token_id: TokenIdentifier,
-        delegation_sc_address: Address,
-        dex_swap_sc_address: Address,
-        price_aggregator_address: Address,
-        loan_to_value_percentage: Self::BigUint,
-        lender_rewards_percentage_per_epoch: Self::BigUint,
-        base_borrow_rate: Self::BigUint,
-        borrow_rate_under_opt_factor: Self::BigUint,
-        borrow_rate_over_opt_factor: Self::BigUint,
-        optimal_utilisation: Self::BigUint,
+        staked_token_ticker: ManagedBuffer,
+        delegation_sc_address: ManagedAddress,
+        dex_swap_sc_address: ManagedAddress,
+        price_aggregator_address: ManagedAddress,
+        loan_to_value_percentage: BigUint,
+        lender_rewards_percentage_per_epoch: BigUint,
+        base_borrow_rate: BigUint,
+        borrow_rate_under_opt_factor: BigUint,
+        borrow_rate_over_opt_factor: BigUint,
+        optimal_utilisation: BigUint,
     ) -> SCResult<()> {
         require!(
             stablecoin_token_id.is_valid_esdt_identifier(),
@@ -69,6 +71,7 @@ pub trait SavingsAccount:
         self.stablecoin_token_id().set(&stablecoin_token_id);
         self.liquid_staking_token_id().set(&liquid_staking_token_id);
         self.staked_token_id().set(&staked_token_id);
+        self.staked_token_ticker().set(&staked_token_ticker);
 
         self.delegation_sc_address().set(&delegation_sc_address);
         self.dex_swap_sc_address().set(&dex_swap_sc_address);
@@ -108,7 +111,7 @@ pub trait SavingsAccount:
     fn lend(
         &self,
         #[payment_token] payment_token: TokenIdentifier,
-        #[payment_amount] payment_amount: Self::BigUint,
+        #[payment_amount] payment_amount: BigUint,
     ) -> SCResult<()> {
         self.require_lend_token_issued()?;
         self.require_no_ongoing_operation()?;
@@ -143,7 +146,7 @@ pub trait SavingsAccount:
         &self,
         #[payment_token] payment_token: TokenIdentifier,
         #[payment_nonce] payment_nonce: u64,
-        #[payment_amount] payment_amount: Self::BigUint,
+        #[payment_amount] payment_amount: BigUint,
     ) -> SCResult<()> {
         self.require_borrow_token_issued()?;
         self.require_no_ongoing_operation()?;
@@ -203,30 +206,35 @@ pub trait SavingsAccount:
 
     #[payable("*")]
     #[endpoint]
-    fn repay(&self) -> SCResult<()> {
+    fn repay(
+        &self,
+        #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>,
+    ) -> SCResult<()> {
         self.require_borrow_token_issued()?;
         self.require_no_ongoing_operation()?;
 
-        let transfers = self.get_all_esdt_transfers();
+        let first_payment = payments.get(0).ok_or(REPAY_INVALID_PAYMENTS_ERR_MSG)?;
+        let second_payment = payments.get(1).ok_or(REPAY_INVALID_PAYMENTS_ERR_MSG)?;
+
         require!(
-            transfers.len() == 2,
+            payments.len() == 2,
             "Must send exactly 2 types of tokens: Borrow SFTs and Stablecoins"
         );
 
         let stablecoin_token_id = self.stablecoin_token_id().get();
         let borrow_token_id = self.borrow_token_id().get();
         require!(
-            transfers[0].token_name == stablecoin_token_id,
+            first_payment.token_identifier == stablecoin_token_id,
             "First transfer must be the Stablecoins"
         );
         require!(
-            transfers[1].token_name == borrow_token_id,
+            second_payment.token_identifier == borrow_token_id,
             "Second transfer token must be the Borrow Tokens"
         );
 
-        let stablecoin_amount = &transfers[0].amount;
-        let borrow_token_amount = &transfers[1].amount;
-        let borrow_token_nonce = transfers[1].token_nonce;
+        let stablecoin_amount = &first_payment.amount;
+        let borrow_token_amount = &second_payment.amount;
+        let borrow_token_nonce = second_payment.token_nonce;
 
         let mut borrow_metadata = self.borrow_metadata(borrow_token_nonce).get();
         self.update_borrow_metadata(
@@ -285,7 +293,7 @@ pub trait SavingsAccount:
 
         let caller = self.blockchain().get_caller();
         let extra_stablecoins_paid = stablecoin_amount - &total_stablecoins_needed;
-        if extra_stablecoins_paid > 0 {
+        if extra_stablecoins_paid > 0u32 {
             self.send().direct(
                 &caller,
                 &stablecoin_token_id,
@@ -327,7 +335,7 @@ pub trait SavingsAccount:
         &self,
         #[payment_token] payment_token: TokenIdentifier,
         #[payment_nonce] payment_nonce: u64,
-        #[payment_amount] payment_amount: Self::BigUint,
+        #[payment_amount] payment_amount: BigUint,
     ) -> SCResult<()> {
         self.require_lend_token_issued()?;
         self.require_no_ongoing_operation()?;
@@ -379,7 +387,7 @@ pub trait SavingsAccount:
         &self,
         #[payment_token] payment_token: TokenIdentifier,
         #[payment_nonce] payment_nonce: u64,
-        #[payment_amount] payment_amount: Self::BigUint,
+        #[payment_amount] payment_amount: BigUint,
     ) -> SCResult<()> {
         self.require_lend_token_issued()?;
         self.require_no_ongoing_operation()?;
@@ -429,13 +437,9 @@ pub trait SavingsAccount:
     // views
 
     #[view(getLenderClaimableRewards)]
-    fn get_lender_claimable_rewards(
-        &self,
-        sft_nonce: u64,
-        sft_amount: &Self::BigUint,
-    ) -> Self::BigUint {
+    fn get_lender_claimable_rewards(&self, sft_nonce: u64, sft_amount: &BigUint) -> BigUint {
         if self.lend_metadata(sft_nonce).is_empty() {
-            return Self::BigUint::zero();
+            return BigUint::zero();
         }
 
         let lend_metadata = self.lend_metadata(sft_nonce).get();
@@ -452,15 +456,14 @@ pub trait SavingsAccount:
 
     // private
 
-    fn get_staked_token_value_in_dollars(&self) -> SCResult<Self::BigUint> {
-        let staked_token_id = self.staked_token_id().get();
-        let staked_token_ticker = self.get_token_ticker(&staked_token_id);
+    fn get_staked_token_value_in_dollars(&self) -> SCResult<BigUint> {
+        let staked_token_ticker = self.staked_token_ticker().get();
         let opt_price = self.get_price_for_pair(staked_token_ticker, DOLLAR_TICKER.into());
 
         opt_price.ok_or("Failed to get staked token price").into()
     }
 
-    fn get_staking_amount_for_position(&self, sft_nonce: u64) -> Self::BigUint {
+    fn get_staking_amount_for_position(&self, sft_nonce: u64) -> BigUint {
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
 
         self.blockchain()
@@ -469,9 +472,9 @@ pub trait SavingsAccount:
 
     fn update_lend_metadata(
         &self,
-        lend_metadata: &mut LendMetadata<Self::BigUint>,
+        lend_metadata: &mut LendMetadata<Self::Api>,
         lend_nonce: u64,
-        payment_amount: &Self::BigUint,
+        payment_amount: &BigUint,
     ) {
         lend_metadata.amount_in_circulation -= payment_amount;
 
@@ -484,9 +487,9 @@ pub trait SavingsAccount:
 
     fn update_borrow_metadata(
         &self,
-        borrow_metadata: &mut BorrowMetadata<Self::BigUint>,
+        borrow_metadata: &mut BorrowMetadata<Self::Api>,
         borrow_nonce: u64,
-        payment_amount: &Self::BigUint,
+        payment_amount: &BigUint,
     ) {
         borrow_metadata.amount_in_circulation -= payment_amount;
 
@@ -500,17 +503,17 @@ pub trait SavingsAccount:
     // storage
 
     #[storage_mapper("poolParams")]
-    fn pool_params(&self) -> SingleValueMapper<Self::Storage, PoolParams<Self::BigUint>>;
+    fn pool_params(&self) -> SingleValueMapper<PoolParams<Self::Api>>;
 
     #[view(getLoadToValuePercentage)]
     #[storage_mapper("loadToValuePercentage")]
-    fn loan_to_value_percentage(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
+    fn loan_to_value_percentage(&self) -> SingleValueMapper<BigUint>;
 
     #[view(getLendedAmount)]
     #[storage_mapper("lendedAmount")]
-    fn lended_amount(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
+    fn lended_amount(&self) -> SingleValueMapper<BigUint>;
 
     #[view(getBorowedAmount)]
     #[storage_mapper("borrowedAmount")]
-    fn borrowed_amount(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
+    fn borrowed_amount(&self) -> SingleValueMapper<BigUint>;
 }

@@ -1,11 +1,8 @@
 elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
-use crate::{
-    multi_transfer::MultiTransferAsync,
-    ongoing_operation::{
-        LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
-    },
+use crate::ongoing_operation::{
+    LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
 };
 
 const DELEGATION_CLAIM_REWARDS_ENDPOINT: &[u8] = b"claimRewards";
@@ -23,11 +20,26 @@ mod dex_proxy {
         fn swap_tokens_fixed_input(
             &self,
             #[payment_token] token_in: TokenIdentifier,
-            #[payment_amount] amount_in: Self::BigUint,
+            #[payment_amount] amount_in: BigUint,
             token_out: TokenIdentifier,
-            amount_out_min: Self::BigUint,
-            #[var_args] opt_accept_funds_func: OptionalArg<BoxedBytes>,
+            amount_out_min: BigUint,
+            #[var_args] opt_accept_funds_func: OptionalArg<ManagedBuffer>,
         );
+    }
+}
+
+mod delegation_proxy {
+    elrond_wasm::imports!();
+
+    #[elrond_wasm::proxy]
+    pub trait Delegation {
+        #[payable("*")]
+        #[endpoint(claimRewards)]
+        fn claim_rewards(
+            &self,
+            #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>,
+            #[var_args] opt_receive_funds_func: OptionalArg<ManagedBuffer>,
+        ) -> SCResult<()>;
     }
 }
 
@@ -41,14 +53,13 @@ pub struct StakingPosition {
 #[elrond_wasm::module]
 pub trait StakingRewardsModule:
     crate::math::MathModule
-    + crate::multi_transfer::MultiTransferModule
     + crate::ongoing_operation::OngoingOperationModule
     + crate::tokens::TokensModule
 {
     // endpoints
 
     #[endpoint(claimStakingRewards)]
-    fn claim_staking_rewards(&self) -> SCResult<OptionalResult<MultiTransferAsync<Self::SendApi>>> {
+    fn claim_staking_rewards(&self) -> SCResult<OptionalResult<AsyncCall>> {
         let current_epoch = self.blockchain().get_block_epoch();
         let last_claim_epoch = self.last_staking_rewards_claim_epoch().get();
         require!(
@@ -76,16 +87,16 @@ pub trait StakingRewardsModule:
         };
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
-        let mut transfers = Vec::new();
-        let mut callback_pos_ids = Vec::new();
+        let mut transfers = ManagedVec::new();
+        let mut callback_pos_ids = ManagedVec::new();
 
         let _ = self.run_while_it_has_gas(
             || {
                 let current_staking_pos = self.staking_position(pos_id).get();
                 let sft_nonce = current_staking_pos.liquid_staking_nonce;
 
-                transfers.push(crate::multi_transfer::EsdtTokenPayment {
-                    token_name: liquid_staking_token_id.clone(),
+                transfers.push(EsdtTokenPayment {
+                    token_identifier: liquid_staking_token_id.clone(),
                     token_nonce: sft_nonce,
                     amount: self
                         .blockchain()
@@ -105,30 +116,29 @@ pub trait StakingRewardsModule:
             Some(STAKING_REWARDS_CLAIM_GAS_PER_TOKEN),
         )?;
 
-        let last_pos_id = callback_pos_ids[callback_pos_ids.len() - 1];
-        self.save_progress(&OngoingOperationType::ClaimStakingRewards {
-            pos_id: last_pos_id,
-            callback_executed: false,
-        });
+        if let Some(last_pos_id) = callback_pos_ids.get(callback_pos_ids.len() - 1) {
+            self.save_progress(&OngoingOperationType::ClaimStakingRewards {
+                pos_id: last_pos_id,
+                callback_executed: false,
+            });
+        }
 
         if !transfers.is_empty() {
-            // TODO: Use SC proxy instead of manual call
-            let mut async_call = MultiTransferAsync::new(
-                self.send(),
-                self.delegation_sc_address().get(),
-                DELEGATION_CLAIM_REWARDS_ENDPOINT,
-                transfers,
-            );
-            async_call.add_endpoint_arg(&RECEIVE_STAKING_REWARDS_FUNC_NAME);
+            let async_call = self
+                .delegation_proxy(self.delegation_sc_address().get())
+                .claim_rewards(
+                    transfers,
+                    OptionalResult::Some(RECEIVE_STAKING_REWARDS_FUNC_NAME.into()),
+                )
+                .async_call()
+                .with_callback(
+                    <Self as StakingRewardsModule>::callbacks(self)
+                        .claim_staking_rewards_callback(callback_pos_ids),
+                );
 
-            async_call.add_callback(b"claim_staking_rewards_callback");
-            for cb_pos in callback_pos_ids {
-                async_call.add_callback_arg(&cb_pos);
-            }
-
-            Ok(OptionalResult::Some(async_call))
+            Ok(OptionalResult::Some(async_call));
         } else {
-            Ok(OptionalResult::None)
+            Ok(OptionalResult::None);
         }
     }
 
@@ -136,13 +146,14 @@ pub trait StakingRewardsModule:
     #[callback]
     fn claim_staking_rewards_callback(
         &self,
-        #[call_result] result: AsyncCallResult<VarArgs<u64>>,
-        pos_ids: VarArgs<u64>,
+        pos_ids: ManagedVec<u64>,
+        #[payment_multi] new_liquid_staking_tokens: ManagedVec<EsdtTokenPayment<Self::Api>>,
+        #[call_result] result: ManagedAsyncCallResult<ManagedVarArgs<u64>>,
     ) -> SCResult<OperationCompletionStatus> {
         match result {
             // "result" contains nonces created by "ESDTNFTCreate calls on callee contract"
             // we don't need them, as we already have them in payment call data
-            AsyncCallResult::Ok(_) => {
+            ManagedAsyncCallResult::Ok(_) => {
                 let last_pos_id = match self.load_operation() {
                     OngoingOperationType::ClaimStakingRewards {
                         pos_id,
@@ -158,7 +169,6 @@ pub trait StakingRewardsModule:
                     _ => return sc_error!("Invalid operation in callback"),
                 };
 
-                let new_liquid_staking_tokens = self.get_all_esdt_transfers();
                 require!(
                     new_liquid_staking_tokens.len() == pos_ids.len(),
                     "Invalid old and new liquid staking position lengths"
@@ -166,12 +176,8 @@ pub trait StakingRewardsModule:
 
                 // update liquid staking token nonces
                 // needed to know which liquid staking SFT to return on repay
-                for (pos_id, new_token) in pos_ids
-                    .into_vec()
-                    .iter()
-                    .zip(new_liquid_staking_tokens.iter())
-                {
-                    self.staking_position(*pos_id)
+                for (pos_id, new_token) in pos_ids.iter().zip(new_liquid_staking_tokens.iter()) {
+                    self.staking_position(pos_id)
                         .update(|pos| pos.liquid_staking_nonce = new_token.token_nonce);
                 }
 
@@ -186,7 +192,7 @@ pub trait StakingRewardsModule:
                     Ok(OperationCompletionStatus::InterruptedBeforeOutOfGas)
                 }
             }
-            AsyncCallResult::Err(err) => Err(SCError::from(err.err_msg)),
+            ManagedAsyncCallResult::Err(_) => sc_error!("Async call failed"),
         }
     }
 
@@ -204,7 +210,7 @@ pub trait StakingRewardsModule:
 
     // TODO: Convert EGLD to WrapedEgld first (DEX does not convert EGLD directly)
     #[endpoint(convertStakingTokenToStablecoin)]
-    fn convert_staking_token_to_stablecoin(&self) -> SCResult<AsyncCall<Self::SendApi>> {
+    fn convert_staking_token_to_stablecoin(&self) -> SCResult<AsyncCall> {
         self.require_no_ongoing_operation()?;
 
         let current_epoch = self.blockchain().get_block_epoch();
@@ -234,13 +240,12 @@ pub trait StakingRewardsModule:
                 staking_token_id,
                 staking_token_balance,
                 stablecoin_token_id,
-                Self::BigUint::zero(),
+                BigUint::zero(),
                 OptionalArg::Some(b"receive_stablecoin_after_convert"[..].into()),
             )
             .async_call()
             .with_callback(
-                <Self as StakingRewardsModule>::callbacks(self)
-                    .convert_staking_token_to_stablecoin_callback(),
+                <Self as StakingRewardsModule>::callbacks(self).convert_staking_token_callback(),
             ))
     }
 
@@ -251,7 +256,7 @@ pub trait StakingRewardsModule:
     fn receive_stablecoin_after_convert(
         &self,
         #[payment_token] payment_token: TokenIdentifier,
-        #[payment_amount] payment_amount: Self::BigUint,
+        #[payment_amount] payment_amount: BigUint,
     ) -> SCResult<()> {
         let stablecoin_token_id = self.stablecoin_token_id().get();
         require!(
@@ -266,16 +271,16 @@ pub trait StakingRewardsModule:
     }
 
     #[callback]
-    fn convert_staking_token_to_stablecoin_callback(
+    fn convert_staking_token_callback(
         &self,
-        #[call_result] result: AsyncCallResult<VarArgs<BoxedBytes>>,
+        #[call_result] result: ManagedAsyncCallResult<ManagedVarArgs<ManagedBuffer>>,
     ) {
         match result {
-            AsyncCallResult::Ok(_) => {
+            ManagedAsyncCallResult::Ok(_) => {
                 let current_epoch = self.blockchain().get_block_epoch();
                 self.last_staking_token_convert_epoch().set(&current_epoch);
             }
-            AsyncCallResult::Err(_) => {}
+            ManagedAsyncCallResult::Err(_) => {}
         }
 
         self.clear_operation();
@@ -299,14 +304,11 @@ pub trait StakingRewardsModule:
         );
 
         let (mut current_lend_nonce, mut total_rewards) = match self.load_operation() {
-            OngoingOperationType::None => (1u64, Self::BigUint::zero()),
+            OngoingOperationType::None => (1u64, BigUint::zero()),
             OngoingOperationType::CalculateTotalLenderRewards {
                 lend_nonce,
-                total_rewards_be_bytes,
-            } => (
-                lend_nonce,
-                Self::BigUint::from_bytes_be(total_rewards_be_bytes.as_slice()),
-            ),
+                total_rewards,
+            } => (lend_nonce, total_rewards),
             _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
         };
         let last_lend_nonce = self.blockchain().get_current_esdt_nft_nonce(
@@ -365,7 +367,7 @@ pub trait StakingRewardsModule:
             OperationCompletionStatus::InterruptedBeforeOutOfGas => {
                 self.save_progress(&OngoingOperationType::CalculateTotalLenderRewards {
                     lend_nonce: current_lend_nonce,
-                    total_rewards_be_bytes: total_rewards.to_bytes_be().into(),
+                    total_rewards,
                 });
             }
         };
@@ -441,53 +443,51 @@ pub trait StakingRewardsModule:
     // proxies
 
     #[proxy]
-    fn dex_proxy(&self, address: Address) -> dex_proxy::Proxy<Self::SendApi>;
+    fn dex_proxy(&self, address: ManagedAddress) -> dex_proxy::Proxy<Self::Api>;
+
+    #[proxy]
+    fn delegation_proxy(&self, address: ManagedAddress) -> delegation_proxy::Proxy<Self::Api>;
 
     // storage
 
     #[view(getDelegationScAddress)]
     #[storage_mapper("delegationScAddress")]
-    fn delegation_sc_address(&self) -> SingleValueMapper<Self::Storage, Address>;
+    fn delegation_sc_address(&self) -> SingleValueMapper<ManagedAddress>;
 
     #[view(getDexSwapScAddress)]
     #[storage_mapper("dexSwapScAddress")]
-    fn dex_swap_sc_address(&self) -> SingleValueMapper<Self::Storage, Address>;
+    fn dex_swap_sc_address(&self) -> SingleValueMapper<ManagedAddress>;
 
     #[storage_mapper("stakingPosition")]
-    fn staking_position(&self, pos_id: u64) -> SingleValueMapper<Self::Storage, StakingPosition>;
+    fn staking_position(&self, pos_id: u64) -> SingleValueMapper<StakingPosition>;
 
     #[storage_mapper("stakingPositionNonceToId")]
-    fn staking_position_nonce_to_id(
-        &self,
-        liquid_staking_nonce: u64,
-    ) -> SingleValueMapper<Self::Storage, u64>;
+    fn staking_position_nonce_to_id(&self, liquid_staking_nonce: u64) -> SingleValueMapper<u64>;
 
     #[storage_mapper("lastValidStakingPositionId")]
-    fn last_valid_staking_position_id(&self) -> SingleValueMapper<Self::Storage, u64>;
+    fn last_valid_staking_position_id(&self) -> SingleValueMapper<u64>;
 
     #[view(getLastStakingRewardsClaimEpoch)]
     #[storage_mapper("lastStakingRewardsClaimEpoch")]
-    fn last_staking_rewards_claim_epoch(&self) -> SingleValueMapper<Self::Storage, u64>;
+    fn last_staking_rewards_claim_epoch(&self) -> SingleValueMapper<u64>;
 
     #[view(getLastStakingTokenConvertEpoch)]
     #[storage_mapper("lastStakingTokenConvertEpoch")]
-    fn last_staking_token_convert_epoch(&self) -> SingleValueMapper<Self::Storage, u64>;
+    fn last_staking_token_convert_epoch(&self) -> SingleValueMapper<u64>;
 
     #[view(getLastCalculateRewardsEpoch)]
     #[storage_mapper("lastCalculateRewardsEpoch")]
-    fn last_calculate_rewards_epoch(&self) -> SingleValueMapper<Self::Storage, u64>;
+    fn last_calculate_rewards_epoch(&self) -> SingleValueMapper<u64>;
 
     #[view(getLenderRewardsPercentagePerEpoch)]
     #[storage_mapper("lenderRewardsPercentagePerEpoch")]
-    fn lender_rewards_percentage_per_epoch(
-        &self,
-    ) -> SingleValueMapper<Self::Storage, Self::BigUint>;
+    fn lender_rewards_percentage_per_epoch(&self) -> SingleValueMapper<BigUint>;
 
     #[view(getUnclaimedRewards)]
     #[storage_mapper("unclaimedRewards")]
-    fn unclaimed_rewards(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
+    fn unclaimed_rewards(&self) -> SingleValueMapper<BigUint>;
 
     #[view(getStablecoinReserves)]
     #[storage_mapper("stablecoinReserves")]
-    fn stablecoin_reserves(&self) -> SingleValueMapper<Self::Storage, Self::BigUint>;
+    fn stablecoin_reserves(&self) -> SingleValueMapper<BigUint>;
 }

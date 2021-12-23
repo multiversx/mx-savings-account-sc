@@ -6,11 +6,11 @@ pub const ANOTHER_ONGOING_OP_ERR_MSG: &[u8] = b"Another ongoing operation is in 
 pub const CALLBACK_IN_PROGRESS_ERR_MSG: &[u8] = b"Callback not executed yet";
 
 #[derive(TopDecode, TopEncode, TypeAbi, PartialEq)]
-pub enum OngoingOperationType {
+pub enum OngoingOperationType<M: ManagedTypeApi> {
     None,
     CalculateTotalLenderRewards {
         lend_nonce: u64,
-        total_rewards_be_bytes: BoxedBytes,
+        total_rewards: BigUint<M>,
     },
     ClaimStakingRewards {
         pos_id: u64,
@@ -19,13 +19,13 @@ pub enum OngoingOperationType {
     ConvertStakingTokenToStablecoin,
 }
 
-pub enum LoopOp {
+pub enum LoopOp<M: ManagedTypeApi> {
     Continue,
-    Save(OngoingOperationType),
+    Save(OngoingOperationType<M>),
     Break,
 }
 
-impl LoopOp {
+impl<M: ManagedTypeApi> LoopOp<M> {
     fn is_break(&self) -> bool {
         return matches!(self, LoopOp::Break);
     }
@@ -39,7 +39,7 @@ pub trait OngoingOperationModule {
         opt_additional_gas_reserve_per_iteration: Option<u64>,
     ) -> SCResult<OperationCompletionStatus>
     where
-        Process: FnMut() -> LoopOp,
+        Process: FnMut() -> LoopOp<Self::Api>,
     {
         let gas_before = self.blockchain().get_gas_left();
 
@@ -76,11 +76,11 @@ pub trait OngoingOperationModule {
         gas_left > MIN_GAS_TO_SAVE_PROGRESS + extra_reserve_needed + operation_cost
     }
 
-    fn load_operation(&self) -> OngoingOperationType {
+    fn load_operation(&self) -> OngoingOperationType<Self::Api> {
         self.current_ongoing_operation().get()
     }
 
-    fn save_progress(&self, operation: &OngoingOperationType) {
+    fn save_progress(&self, operation: &OngoingOperationType<Self::Api>) {
         self.current_ongoing_operation().set(operation);
     }
 
@@ -90,12 +90,12 @@ pub trait OngoingOperationModule {
 
     fn require_no_ongoing_operation(&self) -> SCResult<()> {
         require!(
-            self.current_ongoing_operation().get() == OngoingOperationType::None,
+            self.current_ongoing_operation().is_empty(),
             "Ongoing operation in progress"
         );
         Ok(())
     }
 
     #[storage_mapper("currentOngoingOperation")]
-    fn current_ongoing_operation(&self) -> SingleValueMapper<Self::Storage, OngoingOperationType>;
+    fn current_ongoing_operation(&self) -> SingleValueMapper<OngoingOperationType<Self::Api>>;
 }
