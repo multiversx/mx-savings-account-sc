@@ -5,9 +5,7 @@ use crate::ongoing_operation::{
     LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
 };
 
-const DELEGATION_CLAIM_REWARDS_ENDPOINT: &[u8] = b"claimRewards";
 const RECEIVE_STAKING_REWARDS_FUNC_NAME: &[u8] = b"receiveStakingRewards";
-
 const STAKING_REWARDS_CLAIM_GAS_PER_TOKEN: u64 = 10_000_000;
 
 mod dex_proxy {
@@ -136,9 +134,9 @@ pub trait StakingRewardsModule:
                         .claim_staking_rewards_callback(callback_pos_ids),
                 );
 
-            Ok(OptionalResult::Some(async_call));
+            Ok(OptionalResult::Some(async_call))
         } else {
-            Ok(OptionalResult::None);
+            Ok(OptionalResult::None)
         }
     }
 

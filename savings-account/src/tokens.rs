@@ -2,12 +2,13 @@ elrond_wasm::imports!();
 
 use crate::model::{BorrowMetadata, LendMetadata};
 
-const TICKER_SEPARATOR: u8 = b'-';
 const LEND_TOKEN_TICKER: &[u8] = b"LEND";
 const BORROW_TOKEN_TICKER: &[u8] = b"BORROW";
-const REQUIRED_LOCAL_ROLES: EsdtLocalRoleFlags = EsdtLocalRoleFlags::NFT_CREATE
-    | EsdtLocalRoleFlags::NFT_ADD_QUANTITY
-    | EsdtLocalRoleFlags::NFT_BURN;
+const REQUIRED_ROLES: EsdtLocalRoleFlags = EsdtLocalRoleFlags::from_bits_truncate(
+    EsdtLocalRoleFlags::NFT_CREATE.bits()
+        | EsdtLocalRoleFlags::NFT_ADD_QUANTITY.bits()
+        | EsdtLocalRoleFlags::NFT_BURN.bits(),
+);
 
 #[elrond_wasm::module]
 pub trait TokensModule {
@@ -89,7 +90,7 @@ pub trait TokensModule {
             .set_special_roles(
                 &self.blockchain().get_sc_address(),
                 &token_id,
-                REQUIRED_LOCAL_ROLES.iter_roles().cloned(),
+                REQUIRED_ROLES.iter_roles().cloned(),
             )
             .async_call()
     }
@@ -138,10 +139,7 @@ pub trait TokensModule {
 
     fn require_local_roles_set(&self, token_id: &TokenIdentifier) -> SCResult<()> {
         let roles = self.blockchain().get_esdt_local_roles(token_id);
-        require!(
-            roles.contains(REQUIRED_LOCAL_ROLES),
-            "ESDT local roles not set"
-        );
+        require!(roles.contains(REQUIRED_ROLES), "ESDT local roles not set");
         Ok(())
     }
 
@@ -151,10 +149,10 @@ pub trait TokensModule {
     fn issue_callback(
         &self,
         token_ticker: ManagedBuffer,
-        #[call_result] result: AsyncCallResult<TokenIdentifier>,
+        #[call_result] result: ManagedAsyncCallResult<TokenIdentifier>,
     ) -> OptionalResult<AsyncCall> {
         match result {
-            AsyncCallResult::Ok(token_id) => {
+            ManagedAsyncCallResult::Ok(token_id) => {
                 if token_ticker == ManagedBuffer::new_from_bytes(LEND_TOKEN_TICKER) {
                     self.lend_token_id().set(&token_id);
                 } else if token_ticker == ManagedBuffer::new_from_bytes(BORROW_TOKEN_TICKER) {
@@ -165,7 +163,7 @@ pub trait TokensModule {
 
                 OptionalResult::Some(self.set_roles(token_id))
             }
-            AsyncCallResult::Err(_) => {
+            ManagedAsyncCallResult::Err(_) => {
                 let caller = self.blockchain().get_owner_address();
                 let (returned_tokens, token_id) = self.call_value().payment_token_pair();
                 if token_id.is_egld() && returned_tokens > 0 {
