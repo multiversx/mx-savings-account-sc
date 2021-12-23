@@ -10,6 +10,7 @@ pub enum OngoingOperationType {
     None,
     CalculateTotalLenderRewards {
         lend_nonce: u64,
+        total_rewards_be_bytes: BoxedBytes,
     },
     ClaimStakingRewards {
         pos_id: u64,
@@ -35,6 +36,7 @@ pub trait OngoingOperationModule {
     fn run_while_it_has_gas<Process>(
         &self,
         mut process: Process,
+        opt_additional_gas_reserve_per_iteration: Option<u64>,
     ) -> SCResult<OperationCompletionStatus>
     where
         Process: FnMut() -> LoopOp,
@@ -46,12 +48,17 @@ pub trait OngoingOperationModule {
         let gas_after = self.blockchain().get_gas_left();
         let gas_per_iteration = gas_before - gas_after;
 
+        let additional_gas_reserve_per_iteration =
+            opt_additional_gas_reserve_per_iteration.unwrap_or_default();
+        let mut total_reserve_needed = additional_gas_reserve_per_iteration;
+
         loop {
             if loop_op.is_break() {
                 break;
             }
 
-            if !self.can_continue_operation(gas_per_iteration) {
+            total_reserve_needed += additional_gas_reserve_per_iteration;
+            if !self.can_continue_operation(gas_per_iteration, total_reserve_needed) {
                 return Ok(OperationCompletionStatus::InterruptedBeforeOutOfGas);
             }
 
@@ -63,10 +70,10 @@ pub trait OngoingOperationModule {
         Ok(OperationCompletionStatus::Completed)
     }
 
-    fn can_continue_operation(&self, operation_cost: u64) -> bool {
+    fn can_continue_operation(&self, operation_cost: u64, extra_reserve_needed: u64) -> bool {
         let gas_left = self.blockchain().get_gas_left();
 
-        gas_left > MIN_GAS_TO_SAVE_PROGRESS + operation_cost
+        gas_left > MIN_GAS_TO_SAVE_PROGRESS + extra_reserve_needed + operation_cost
     }
 
     fn load_operation(&self) -> OngoingOperationType {

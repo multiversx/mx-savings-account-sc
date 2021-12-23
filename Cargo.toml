@@ -2,4 +2,8 @@
 members = [
     "savings-account",
     "savings-account/abi",
+    "delegation-mock",
+    "delegation-mock/abi",
+    "dex-mock",
+    "dex-mock/abi"
 ]

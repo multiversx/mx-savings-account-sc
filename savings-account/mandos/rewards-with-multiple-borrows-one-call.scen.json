@@ -1,0 +1,13 @@
+{
+    "name": "rewards with multiple borrows, all in one call (no ongoing operations)",
+    "steps": [
+        {
+            "step": "externalSteps",
+            "path": "calculate-rewards-one-call.json"
+        },
+        {
+            "step": "externalSteps",
+            "path": "lender-claim-after-multiple-borrows.json"
+        }
+    ]
+}

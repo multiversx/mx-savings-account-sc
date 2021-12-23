@@ -7,20 +7,18 @@ pub struct PoolParams<BigUint: BigUintApi> {
     pub borrow_rate_under_opt_factor: BigUint,
     pub borrow_rate_over_opt_factor: BigUint,
     pub optimal_utilisation: BigUint,
-    pub reserve_factor: BigUint,
 }
 
 #[derive(TypeAbi, TopEncode, TopDecode)]
-pub struct LendMetadata<BigUint: BigUintApi>
-{
+pub struct LendMetadata<BigUint: BigUintApi> {
     pub lend_epoch: u64,
     pub amount_in_circulation: BigUint,
 }
 
 #[derive(TypeAbi, TopEncode, TopDecode)]
-pub struct BorrowMetadata<BigUint: BigUintApi>
-{
+pub struct BorrowMetadata<BigUint: BigUintApi> {
     pub staking_position_id: u64,
     pub borrow_epoch: u64,
+    pub staked_token_value_in_dollars_at_borrow: BigUint,
     pub amount_in_circulation: BigUint,
 }

@@ -1,0 +1,171 @@
+{
+    "name": "savings account init",
+    "steps": [
+        {
+            "step": "externalSteps",
+            "path": "../../delegation-mock/mandos/init.scen.json"
+        },
+        {
+            "step": "externalSteps",
+            "path": "../../dex-mock/mandos/init.scen.json"
+        },
+        {
+            "step": "externalSteps",
+            "path": "../../price-aggregator/mandos/get_latest_price_feed.scen.json"
+        },
+        {
+            "step": "setState",
+            "accounts": {
+                "address:owner": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "storage": {}
+                },
+                "address:lender1": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "100,000"
+                    },
+                    "storage": {}
+                },
+                "address:lender2": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "100,000"
+                    },
+                    "storage": {}
+                }
+            },
+            "newAddresses": [
+                {
+                    "creatorAddress": "address:owner",
+                    "creatorNonce": "0",
+                    "newAddress": "sc:savings_account"
+                }
+            ]
+        },
+        {
+            "step": "setState",
+            "currentBlockInfo": {
+                "blockEpoch": "10"
+            }
+        },
+        {
+            "step": "scDeploy",
+            "txId": "deploy-savings-account",
+            "comment": "75% loan to value, 0.5% lender rewards per epoch, 50% base borrow rate, 10% for borrow rate under/over factor, 75% opt util, 60% reserve factor",
+            "tx": {
+                "from": "address:owner",
+                "contractCode": "file:../output/savings-account.wasm",
+                "value": "0",
+                "arguments": [
+                    "str:STABLE-123456",
+                    "str:LIQ-123456",
+                    "str:EGLD",
+                    "sc:delegation",
+                    "sc:dex",
+                    "sc:price_aggregator",
+                    "750,000,000",
+                    "5,000,000",
+                    "500,000,000",
+                    "100,000,000",
+                    "100,000,000",
+                    "750,000,000"
+                ],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "storage": {
+                        "str:stablecoinTokenId": "str:STABLE-123456",
+                        "str:liquidStakingTokenId": "str:LIQ-123456",
+                        "str:stakedTokenId": "str:EGLD",
+                        "str:delegationScAddress": "sc:delegation",
+                        "str:dexSwapScAddress": "sc:dex",
+                        "str:priceAggregatorAddress": "sc:price_aggregator",
+                        "str:lastStakingRewardsClaimEpoch": "10",
+                        "str:stakingPosition|u64:0": "u64:0|u64:0|u64:0",
+                        "str:poolParams": {
+                            "1-base_borrow_rate": "biguint:500,000,000",
+                            "2-borrow_rate_under_opt_factor": "biguint:100,000,000",
+                            "3-borrow_rate_over_opt_factor": "biguint:100,000,000",
+                            "4-optimal_utilisation": "biguint:750,000,000"
+                        },
+                        "str:loadToValuePercentage": "750,000,000",
+                        "str:lenderRewardsPercentagePerEpoch": "5,000,000"
+                    },
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
+        },
+        {
+            "step": "setState",
+            "comment": "Simulate issue + set roles for lend/borrow token",
+            "currentBlockInfo": {
+                "blockEpoch": "10"
+            },
+            "accounts": {
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:LEND-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ]
+                        },
+                        "str:BORROW-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ]
+                        }
+                    },
+                    "storage": {
+                        "str:stablecoinTokenId": "str:STABLE-123456",
+                        "str:liquidStakingTokenId": "str:LIQ-123456",
+                        "str:stakedTokenId": "str:EGLD",
+                        "str:delegationScAddress": "sc:delegation",
+                        "str:dexSwapScAddress": "sc:dex",
+                        "str:priceAggregatorAddress": "sc:price_aggregator",
+                        "str:lastStakingRewardsClaimEpoch": "10",
+                        "str:stakingPosition|u64:0": "u64:0|u64:0|u64:0",
+                        "str:poolParams": {
+                            "1-base_borrow_rate": "biguint:500,000,000",
+                            "2-borrow_rate_under_opt_factor": "biguint:100,000,000",
+                            "3-borrow_rate_over_opt_factor": "biguint:100,000,000",
+                            "4-optimal_utilisation": "biguint:750,000,000"
+                        },
+                        "str:loadToValuePercentage": "750,000,000",
+                        "str:lenderRewardsPercentagePerEpoch": "5,000,000",
+
+                        "str:lendTokenId": "str:LEND-123456",
+                        "str:borrowTokenId": "str:BORROW-123456"
+                    },
+                    "owner": "address:owner",
+                    "code": "file:../output/savings-account.wasm"
+                }
+            }
+        }
+    ]
+}

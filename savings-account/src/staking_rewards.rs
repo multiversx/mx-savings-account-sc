@@ -1,11 +1,17 @@
 elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
-use crate::ongoing_operation::{
-    LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
+use crate::{
+    multi_transfer::MultiTransferAsync,
+    ongoing_operation::{
+        LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
+    },
 };
 
 const DELEGATION_CLAIM_REWARDS_ENDPOINT: &[u8] = b"claimRewards";
+const RECEIVE_STAKING_REWARDS_FUNC_NAME: &[u8] = b"receiveStakingRewards";
+
+const STAKING_REWARDS_CLAIM_GAS_PER_TOKEN: u64 = 10_000_000;
 
 mod dex_proxy {
     elrond_wasm::imports!();
@@ -27,23 +33,22 @@ mod dex_proxy {
 
 #[derive(TypeAbi, TopEncode, TopDecode)]
 pub struct StakingPosition {
-    pub liquid_staking_nonce: u64,
     pub prev_pos_id: u64,
     pub next_pos_id: u64,
+    pub liquid_staking_nonce: u64,
 }
 
 #[elrond_wasm::module]
 pub trait StakingRewardsModule:
-    crate::multi_transfer::MultiTransferModule
+    crate::math::MathModule
+    + crate::multi_transfer::MultiTransferModule
     + crate::ongoing_operation::OngoingOperationModule
     + crate::tokens::TokensModule
 {
     // endpoints
 
-    // TODO: Ongoing operation pattern
-    // TODO: Pause SC while this operation is in progress
     #[endpoint(claimStakingRewards)]
-    fn claim_staking_rewards(&self) -> SCResult<()> {
+    fn claim_staking_rewards(&self) -> SCResult<OptionalResult<MultiTransferAsync<Self::SendApi>>> {
         let current_epoch = self.blockchain().get_block_epoch();
         let last_claim_epoch = self.last_staking_rewards_claim_epoch().get();
         require!(
@@ -51,20 +56,21 @@ pub trait StakingRewardsModule:
             "Already claimed this epoch"
         );
 
-        let mut pos_id = self.get_first_staking_position_id();
-        let mut current_staking_pos = match self.load_operation() {
-            OngoingOperationType::None => self
-                .get_first_staking_position()
-                .ok_or("No staking positions available")?,
+        let mut pos_id = match self.load_operation() {
+            OngoingOperationType::None => {
+                let first_pos_id = self.get_first_staking_position_id();
+                require!(first_pos_id != 0, "No staking positions available");
+
+                first_pos_id
+            }
             OngoingOperationType::ClaimStakingRewards {
                 pos_id,
                 callback_executed,
             } => {
-                if !callback_executed {
-                    return sc_error!(CALLBACK_IN_PROGRESS_ERR_MSG);
-                }
+                require!(callback_executed, CALLBACK_IN_PROGRESS_ERR_MSG);
 
-                self.staking_position(pos_id).get()
+                let staking_pos = self.staking_position(pos_id).get();
+                staking_pos.next_pos_id
             }
             _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
         };
@@ -73,47 +79,126 @@ pub trait StakingRewardsModule:
         let mut transfers = Vec::new();
         let mut callback_pos_ids = Vec::new();
 
-        let _ = self.run_while_it_has_gas(|| {
-            let sft_nonce = current_staking_pos.liquid_staking_nonce;
+        let _ = self.run_while_it_has_gas(
+            || {
+                let current_staking_pos = self.staking_position(pos_id).get();
+                let sft_nonce = current_staking_pos.liquid_staking_nonce;
 
-            transfers.push(crate::multi_transfer::EsdtTokenPayment {
-                token_name: liquid_staking_token_id.clone(),
-                token_nonce: sft_nonce,
-                amount: self
-                    .blockchain()
-                    .get_sc_balance(&liquid_staking_token_id, sft_nonce),
-                token_type: EsdtTokenType::SemiFungible,
-            });
-            callback_pos_ids.push(BoxedBytes::from(&pos_id.to_be_bytes()[..]));
+                transfers.push(crate::multi_transfer::EsdtTokenPayment {
+                    token_name: liquid_staking_token_id.clone(),
+                    token_nonce: sft_nonce,
+                    amount: self
+                        .blockchain()
+                        .get_sc_balance(&liquid_staking_token_id, sft_nonce),
+                    token_type: EsdtTokenType::SemiFungible,
+                });
+                callback_pos_ids.push(pos_id);
 
-            if current_staking_pos.next_pos_id == 0 {
-                return LoopOp::Break;
-            }
+                if current_staking_pos.next_pos_id == 0 {
+                    return LoopOp::Break;
+                }
 
-            pos_id = current_staking_pos.next_pos_id;
-            current_staking_pos = self.staking_position(pos_id).get();
+                pos_id = current_staking_pos.next_pos_id;
 
-            LoopOp::Continue
-        })?;
+                LoopOp::Continue
+            },
+            Some(STAKING_REWARDS_CLAIM_GAS_PER_TOKEN),
+        )?;
 
+        let last_pos_id = callback_pos_ids[callback_pos_ids.len() - 1];
         self.save_progress(&OngoingOperationType::ClaimStakingRewards {
-            pos_id,
+            pos_id: last_pos_id,
             callback_executed: false,
         });
 
         if !transfers.is_empty() {
             // TODO: Use SC proxy instead of manual call
-            let delegation_sc_address = self.delegation_sc_address().get();
-            self.multi_transfer_via_async_call(
-                &delegation_sc_address,
-                &transfers,
-                &DELEGATION_CLAIM_REWARDS_ENDPOINT.into(),
-                &[],
-                &b"claim_staking_rewards_callback"[..].into(),
-                &callback_pos_ids,
+            let mut async_call = MultiTransferAsync::new(
+                self.send(),
+                self.delegation_sc_address().get(),
+                DELEGATION_CLAIM_REWARDS_ENDPOINT,
+                transfers,
             );
-        }
+            async_call.add_endpoint_arg(&RECEIVE_STAKING_REWARDS_FUNC_NAME);
 
+            async_call.add_callback(b"claim_staking_rewards_callback");
+            for cb_pos in callback_pos_ids {
+                async_call.add_callback_arg(&cb_pos);
+            }
+
+            Ok(OptionalResult::Some(async_call))
+        } else {
+            Ok(OptionalResult::None)
+        }
+    }
+
+    #[payable("*")]
+    #[callback]
+    fn claim_staking_rewards_callback(
+        &self,
+        #[call_result] result: AsyncCallResult<VarArgs<u64>>,
+        pos_ids: VarArgs<u64>,
+    ) -> SCResult<OperationCompletionStatus> {
+        match result {
+            // "result" contains nonces created by "ESDTNFTCreate calls on callee contract"
+            // we don't need them, as we already have them in payment call data
+            AsyncCallResult::Ok(_) => {
+                let last_pos_id = match self.load_operation() {
+                    OngoingOperationType::ClaimStakingRewards {
+                        pos_id,
+                        callback_executed: _,
+                    } => {
+                        self.save_progress(&OngoingOperationType::ClaimStakingRewards {
+                            pos_id,
+                            callback_executed: true,
+                        });
+
+                        pos_id
+                    }
+                    _ => return sc_error!("Invalid operation in callback"),
+                };
+
+                let new_liquid_staking_tokens = self.get_all_esdt_transfers();
+                require!(
+                    new_liquid_staking_tokens.len() == pos_ids.len(),
+                    "Invalid old and new liquid staking position lengths"
+                );
+
+                // update liquid staking token nonces
+                // needed to know which liquid staking SFT to return on repay
+                for (pos_id, new_token) in pos_ids
+                    .into_vec()
+                    .iter()
+                    .zip(new_liquid_staking_tokens.iter())
+                {
+                    self.staking_position(*pos_id)
+                        .update(|pos| pos.liquid_staking_nonce = new_token.token_nonce);
+                }
+
+                let last_valid_id = self.last_valid_staking_position_id().get();
+                if last_pos_id == last_valid_id {
+                    let current_epoch = self.blockchain().get_block_epoch();
+                    self.last_staking_rewards_claim_epoch().set(&current_epoch);
+                    self.clear_operation();
+
+                    Ok(OperationCompletionStatus::Completed)
+                } else {
+                    Ok(OperationCompletionStatus::InterruptedBeforeOutOfGas)
+                }
+            }
+            AsyncCallResult::Err(err) => Err(SCError::from(err.err_msg)),
+        }
+    }
+
+    #[payable("*")]
+    #[endpoint(receiveStakingRewards)]
+    fn receive_staking_rewards(&self) -> SCResult<()> {
+        let caller = self.blockchain().get_caller();
+        let delegation_sc_address = self.delegation_sc_address().get();
+        require!(
+            caller == delegation_sc_address,
+            "Only the Delegation SC may call this function"
+        );
         Ok(())
     }
 
@@ -150,89 +235,142 @@ pub trait StakingRewardsModule:
                 staking_token_balance,
                 stablecoin_token_id,
                 Self::BigUint::zero(),
-                OptionalArg::Some(b"convert_staking_token_to_stablecoin_callback"[..].into()),
+                OptionalArg::Some(b"receive_stablecoin_after_convert"[..].into()),
             )
-            .async_call())
+            .async_call()
+            .with_callback(
+                <Self as StakingRewardsModule>::callbacks(self)
+                    .convert_staking_token_to_stablecoin_callback(),
+            ))
     }
 
-    // callbacks
-
-    #[payable("*")]
-    #[callback]
-    fn claim_staking_rewards_callback(
-        &self,
-        #[call_result] result: AsyncCallResult<()>,
-        #[var_args] pos_ids: VarArgs<u64>,
-    ) -> SCResult<OperationCompletionStatus> {
-        match result {
-            AsyncCallResult::Ok(()) => {
-                let last_pos_id = match self.load_operation() {
-                    OngoingOperationType::ClaimStakingRewards {
-                        pos_id,
-                        callback_executed: _,
-                    } => {
-                        self.save_progress(&OngoingOperationType::ClaimStakingRewards {
-                            pos_id,
-                            callback_executed: true,
-                        });
-                        pos_id
-                    }
-                    _ => return sc_error!("Invalid operation in callback"),
-                };
-
-                let new_liquid_staking_tokens = self.get_all_esdt_transfers();
-                if new_liquid_staking_tokens.len() != pos_ids.len() {
-                    return sc_error!("Invalid old and new liquid staking position lengths");
-                }
-
-                // update liquid staking token nonces
-                // needed to know which liquid staking SFT to return on repay
-                for (pos_id, new_token) in pos_ids
-                    .into_vec()
-                    .iter()
-                    .zip(new_liquid_staking_tokens.iter())
-                {
-                    self.staking_position(*pos_id)
-                        .update(|pos| pos.liquid_staking_nonce = new_token.token_nonce);
-                }
-
-                let current_epoch = self.blockchain().get_block_epoch();
-                self.last_staking_rewards_claim_epoch().set(&current_epoch);
-
-                let last_valid_id = self.last_valid_staking_position_id().get();
-                if last_pos_id == last_valid_id {
-                    self.clear_operation();
-                    Ok(OperationCompletionStatus::Completed)
-                } else {
-                    Ok(OperationCompletionStatus::InterruptedBeforeOutOfGas)
-                }
-            }
-            AsyncCallResult::Err(err) => Err(SCError::from(err.err_msg)),
-        }
-    }
-
-    // Technically, this is not a callback, but its use is simply updating storage after DEX Swap
+    // name is intentionally left without camel case to decrease the chance of accidental calls by users
+    // we do not check the caller here to save gas, as the DEX SC only allocates very little gas for this call
     #[payable("*")]
     #[endpoint]
-    fn convert_staking_token_to_stablecoin_callback(
+    fn receive_stablecoin_after_convert(
         &self,
+        #[payment_token] payment_token: TokenIdentifier,
         #[payment_amount] payment_amount: Self::BigUint,
     ) -> SCResult<()> {
-        let caller = self.blockchain().get_caller();
-        let dex_swap_sc_address = self.dex_swap_sc_address().get();
+        let stablecoin_token_id = self.stablecoin_token_id().get();
         require!(
-            caller == dex_swap_sc_address,
-            "Only the DEX Swap SC may call this function"
+            payment_token == stablecoin_token_id,
+            "May only receive stablecoins"
         );
 
-        let current_epoch = self.blockchain().get_block_epoch();
-        self.last_staking_token_convert_epoch().set(&current_epoch);
         self.stablecoin_reserves()
             .update(|stablecoin_reserves| *stablecoin_reserves += payment_amount);
 
-        self.clear_operation();
-
         Ok(())
+    }
+
+    #[callback]
+    fn convert_staking_token_to_stablecoin_callback(
+        &self,
+        #[call_result] result: AsyncCallResult<VarArgs<BoxedBytes>>,
+    ) {
+        match result {
+            AsyncCallResult::Ok(_) => {
+                let current_epoch = self.blockchain().get_block_epoch();
+                self.last_staking_token_convert_epoch().set(&current_epoch);
+            }
+            AsyncCallResult::Err(_) => {}
+        }
+
+        self.clear_operation();
+    }
+
+    #[endpoint(calculateTotalLenderRewards)]
+    fn calculate_total_lender_rewards(&self) -> SCResult<OperationCompletionStatus> {
+        let reward_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
+        let last_calculate_rewards_epoch = self.last_calculate_rewards_epoch().get();
+
+        let last_staking_token_convert_epoch = self.last_staking_token_convert_epoch().get();
+        let current_epoch = self.blockchain().get_block_epoch();
+
+        require!(
+            last_staking_token_convert_epoch == current_epoch,
+            "Must claim staking rewards and convert to stablecoin for this epoch first"
+        );
+        require!(
+            last_calculate_rewards_epoch < current_epoch,
+            "Already calculated rewards this epoch"
+        );
+
+        let (mut current_lend_nonce, mut total_rewards) = match self.load_operation() {
+            OngoingOperationType::None => (1u64, Self::BigUint::zero()),
+            OngoingOperationType::CalculateTotalLenderRewards {
+                lend_nonce,
+                total_rewards_be_bytes,
+            } => (
+                lend_nonce,
+                Self::BigUint::from_bytes_be(total_rewards_be_bytes.as_slice()),
+            ),
+            _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
+        };
+        let last_lend_nonce = self.blockchain().get_current_esdt_nft_nonce(
+            &self.blockchain().get_sc_address(),
+            &self.lend_token_id().get(),
+        );
+        let current_epoch = self.blockchain().get_block_epoch();
+
+        let run_result = self.run_while_it_has_gas(
+            || {
+                // TODO: Use something like a SetMapper or a custom mapper that will hold valid nonces
+                // There's no point in iterating over all the nonces and checking for empty over and over
+                if !self.lend_metadata(current_lend_nonce).is_empty() {
+                    let metadata = self.lend_metadata(current_lend_nonce).get();
+                    let reward_amount = self.compute_reward_amount(
+                        &metadata.amount_in_circulation,
+                        metadata.lend_epoch,
+                        current_epoch,
+                        &reward_percentage_per_epoch,
+                    );
+
+                    total_rewards += reward_amount;
+                }
+
+                current_lend_nonce += 1;
+                if current_lend_nonce > last_lend_nonce {
+                    LoopOp::Break
+                } else {
+                    LoopOp::Continue
+                }
+            },
+            None,
+        )?;
+
+        match run_result {
+            OperationCompletionStatus::Completed => {
+                let prev_unclaimed_rewards = self.unclaimed_rewards().get();
+                let extra_unclaimed = &total_rewards - &prev_unclaimed_rewards;
+
+                // TODO: Maybe calculate by how much it's lower?
+                // For example, if 1000 is needed, but only 900 is available, that's 10% less
+                // So store this "10%" in storage and decrease everyone's rewards by 10% on lenderClaim?
+                let stablecoin_reserves = self.stablecoin_reserves().get();
+                require!(
+                    stablecoin_reserves >= extra_unclaimed,
+                    "Total rewards exceed reserves"
+                );
+
+                let current_epoch = self.blockchain().get_block_epoch();
+                self.last_calculate_rewards_epoch().set(&current_epoch);
+                self.unclaimed_rewards().set(&total_rewards);
+
+                let leftover_reserves = stablecoin_reserves - extra_unclaimed;
+                self.stablecoin_reserves().set(&leftover_reserves);
+            }
+            OperationCompletionStatus::InterruptedBeforeOutOfGas => {
+                self.save_progress(&OngoingOperationType::CalculateTotalLenderRewards {
+                    lend_nonce: current_lend_nonce,
+                    total_rewards_be_bytes: total_rewards.to_bytes_be().into(),
+                });
+            }
+        };
+
+        Ok(run_result)
     }
 
     // private
@@ -264,9 +402,9 @@ pub trait StakingRewardsModule:
         self.staking_position(prev_last_id)
             .update(|last_pos| last_pos.next_pos_id = new_last_id);
         self.staking_position(new_last_id).set(&StakingPosition {
-            liquid_staking_nonce,
             next_pos_id: 0,
             prev_pos_id: prev_last_id,
+            liquid_staking_nonce,
         });
 
         self.staking_position_nonce_to_id(liquid_staking_nonce)
@@ -338,6 +476,12 @@ pub trait StakingRewardsModule:
     #[view(getLastCalculateRewardsEpoch)]
     #[storage_mapper("lastCalculateRewardsEpoch")]
     fn last_calculate_rewards_epoch(&self) -> SingleValueMapper<Self::Storage, u64>;
+
+    #[view(getLenderRewardsPercentagePerEpoch)]
+    #[storage_mapper("lenderRewardsPercentagePerEpoch")]
+    fn lender_rewards_percentage_per_epoch(
+        &self,
+    ) -> SingleValueMapper<Self::Storage, Self::BigUint>;
 
     #[view(getUnclaimedRewards)]
     #[storage_mapper("unclaimedRewards")]

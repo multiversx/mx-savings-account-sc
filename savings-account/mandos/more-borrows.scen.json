@@ -1,0 +1,250 @@
+{
+    "name": "more borrows",
+    "steps": [
+        {
+            "step": "externalSteps",
+            "path": "borrow.scen.json"
+        },
+        {
+            "step": "scCall",
+            "txId": "staker-borrow-2",
+            "tx": {
+                "from": "address:staker",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:LIQ-123456",
+                    "nonce": "2",
+                    "value": "250,000,000,000,000,000,000"
+                },
+                "function": "borrow",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "1",
+                    "str:EGLD",
+                    "str:USD",
+                    "100",
+                    "0",
+                    "2"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "staker-borrow-3",
+            "tx": {
+                "from": "address:staker",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:LIQ-123456",
+                    "nonce": "3",
+                    "value": "250,000,000,000,000,000,000"
+                },
+                "function": "borrow",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "1",
+                    "str:EGLD",
+                    "str:USD",
+                    "100",
+                    "0",
+                    "3"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "staker-borrow-4",
+            "tx": {
+                "from": "address:staker",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:LIQ-123456",
+                    "nonce": "4",
+                    "value": "250,000,000,000,000,000,000"
+                },
+                "function": "borrow",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [
+                    "1",
+                    "str:EGLD",
+                    "str:USD",
+                    "100",
+                    "0",
+                    "4"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "address:staker": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "75,000",
+                        "str:BORROW-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:savings_account"
+                                },
+                                {
+                                    "nonce": "2",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:savings_account"
+                                },
+                                {
+                                    "nonce": "3",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:savings_account"
+                                },
+                                {
+                                    "nonce": "4",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        },
+                        "str:LIQ-123456": {
+                            "instances": []
+                        }
+                    }
+                },
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "75,000",
+                        "str:LIQ-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                },
+                                {
+                                    "nonce": "2",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                },
+                                {
+                                    "nonce": "3",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                },
+                                {
+                                    "nonce": "4",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                }
+                            ]
+                        },
+                        "str:LEND-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "2"
+                        },
+                        "str:BORROW-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "4"
+                        }
+                    },
+                    "storage": {
+                        "str:borrowMetadata|u64:1": {
+                            "1-staking_position_id": "u64:1",
+                            "2-borrow_epoch": "u64:25",
+                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
+                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
+                        },
+                        "str:borrowMetadata|u64:2": {
+                            "1-staking_position_id": "u64:2",
+                            "2-borrow_epoch": "u64:25",
+                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
+                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
+                        },
+                        "str:borrowMetadata|u64:3": {
+                            "1-staking_position_id": "u64:3",
+                            "2-borrow_epoch": "u64:25",
+                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
+                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
+                        },
+                        "str:borrowMetadata|u64:4": {
+                            "1-staking_position_id": "u64:4",
+                            "2-borrow_epoch": "u64:25",
+                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
+                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
+                        },
+                        "str:borrowedAmount": "75,000",
+
+                        "str:stakingPosition|u64:0": {
+                            "1-prev_pos_id": "u64:0",
+                            "2-next_pos_id": "u64:1",
+                            "3-liquid_staking_nonce": "u64:0"
+                        },
+                        "str:stakingPosition|u64:1": {
+                            "1-prev_pos_id": "u64:0",
+                            "2-next_pos_id": "u64:2",
+                            "3-liquid_staking_nonce": "u64:1"
+                        },
+                        "str:stakingPosition|u64:2": {
+                            "1-prev_pos_id": "u64:1",
+                            "2-next_pos_id": "u64:3",
+                            "3-liquid_staking_nonce": "u64:2"
+                        },
+                        "str:stakingPosition|u64:3": {
+                            "1-prev_pos_id": "u64:2",
+                            "2-next_pos_id": "u64:4",
+                            "3-liquid_staking_nonce": "u64:3"
+                        },
+                        "str:stakingPosition|u64:4": {
+                            "1-prev_pos_id": "u64:3",
+                            "2-next_pos_id": "u64:0",
+                            "3-liquid_staking_nonce": "u64:4"
+                        },
+
+                        "+": ""
+                    },
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
+        }
+    ]
+}

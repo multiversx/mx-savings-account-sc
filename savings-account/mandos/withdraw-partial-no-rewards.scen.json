@@ -1,0 +1,133 @@
+{
+    "name": "lender withdraw",
+    "steps": [
+        {
+            "step": "externalSteps",
+            "path": "repay-full.scen.json"
+        },
+        {
+            "step": "scCall",
+            "txId": "lender-withdraw-part-1",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:LEND-123456",
+                    "nonce": "3",
+                    "value": "50,000"
+                },
+                "function": "withdraw",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scCall",
+            "txId": "lender-withdraw-part-2",
+            "tx": {
+                "from": "address:lender1",
+                "to": "sc:savings_account",
+                "value": "0",
+                "esdt": {
+                    "tokenIdentifier": "str:LEND-123456",
+                    "nonce": "3",
+                    "value": "50,000"
+                },
+                "function": "withdraw",
+                "arguments": [],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
+            },
+            "expect": {
+                "status": "0",
+                "message": "",
+                "out": [],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "checkState",
+            "accounts": {
+                "address:lender1": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "102,500",
+                        "str:LEND-123456": {
+                            "instances": []
+                        }
+                    },
+                    "storage": {}
+                },
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "20,666",
+                        "str:LIQ-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "6",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                },
+                                {
+                                    "nonce": "7",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                },
+                                {
+                                    "nonce": "8",
+                                    "balance": "250,000,000,000,000,000,000",
+                                    "creator": "sc:delegation"
+                                }
+                            ]
+                        },
+                        "str:LEND-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "4"
+                        },
+                        "str:BORROW-123456": {
+                            "balance": "0",
+                            "roles": [
+                                "ESDTRoleNFTCreate",
+                                "ESDTRoleNFTAddQuantity",
+                                "ESDTRoleNFTBurn"
+                            ],
+                            "lastNonce": "4"
+                        }
+                    },
+                    "storage": {
+                        "str:lendMetadata|u64:3": "",
+                        "str:lendMetadata|u64:4": {
+                            "1-lend_epoch": "u64:25",
+                            "2-amount_in_circulation": "biguint:50,000"
+                        },
+                        "str:lendedAmount": "50,000",
+                        "str:borrowedAmount": "50,000",
+                        "str:stablecoinReserves": "20,666",
+
+                        "+": ""
+                    },
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
+        }
+    ]
+}
