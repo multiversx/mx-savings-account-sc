@@ -123,7 +123,7 @@ pub trait SavingsAccount:
         );
 
         let lend_token_id = self.lend_token_id().get();
-        let sft_nonce = self.create_tokens(&lend_token_id, &payment_amount)?;
+        let sft_nonce = self.create_tokens(&lend_token_id, &payment_amount);
 
         self.lend_metadata(sft_nonce).set(&LendMetadata {
             lend_epoch: self.blockchain().get_block_epoch(),
@@ -168,7 +168,7 @@ pub trait SavingsAccount:
         require!(borrow_value > 0, "Deposit amount too low");
 
         let borrow_token_id = self.borrow_token_id().get();
-        let borrow_token_nonce = self.create_tokens(&borrow_token_id, &payment_amount)?;
+        let borrow_token_nonce = self.create_tokens(&borrow_token_id, &payment_amount);
         let staking_pos_id = self.add_staking_position(payment_nonce);
 
         let lended_amount = self.lended_amount().get();
@@ -289,7 +289,7 @@ pub trait SavingsAccount:
                 .update(|stablecoin_reserves| *stablecoin_reserves += extra_reserves);
         }
 
-        self.burn_tokens(&borrow_token_id, borrow_token_nonce, borrow_token_amount)?;
+        self.burn_tokens(&borrow_token_id, borrow_token_nonce, borrow_token_amount);
 
         let caller = self.blockchain().get_caller();
         let extra_stablecoins_paid = stablecoin_amount - &total_stablecoins_needed;
@@ -360,7 +360,7 @@ pub trait SavingsAccount:
         self.lended_amount()
             .update(|amount| *amount -= &payment_amount);
 
-        self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount)?;
+        self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount);
 
         let rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
         self.unclaimed_rewards()
@@ -406,10 +406,10 @@ pub trait SavingsAccount:
         );
 
         // burn old sfts
-        self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount)?;
+        self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount);
 
         // create sfts
-        let new_sft_nonce = self.create_tokens(&lend_token_id, &payment_amount)?;
+        let new_sft_nonce = self.create_tokens(&lend_token_id, &payment_amount);
         self.lend_metadata(new_sft_nonce).set(&LendMetadata {
             lend_epoch: last_calculate_rewards_epoch,
             amount_in_circulation: payment_amount.clone(),

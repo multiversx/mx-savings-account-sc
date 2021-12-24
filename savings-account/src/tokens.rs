@@ -95,10 +95,8 @@ pub trait TokensModule {
             .async_call()
     }
 
-    fn create_tokens(&self, token_id: &TokenIdentifier, amount: &BigUint) -> SCResult<u64> {
-        self.require_local_roles_set(token_id)?;
-
-        let sft_nonce = self.send().esdt_nft_create(
+    fn create_tokens(&self, token_id: &TokenIdentifier, amount: &BigUint) -> u64 {
+        self.send().esdt_nft_create(
             token_id,
             amount,
             &ManagedBuffer::new(),
@@ -106,22 +104,12 @@ pub trait TokensModule {
             &ManagedBuffer::new(),
             &(),
             &ManagedVec::new(),
-        );
-
-        Ok(sft_nonce)
+        )
     }
 
-    fn burn_tokens(
-        &self,
-        token_id: &TokenIdentifier,
-        nonce: u64,
-        amount: &BigUint,
-    ) -> SCResult<()> {
-        self.require_local_roles_set(token_id)?;
-
+    #[inline]
+    fn burn_tokens(&self, token_id: &TokenIdentifier, nonce: u64, amount: &BigUint) {
         self.send().esdt_local_burn(token_id, nonce, amount);
-
-        Ok(())
     }
 
     fn require_lend_token_issued(&self) -> SCResult<()> {
@@ -134,12 +122,6 @@ pub trait TokensModule {
             !self.borrow_token_id().is_empty(),
             "Borrow token not issued"
         );
-        Ok(())
-    }
-
-    fn require_local_roles_set(&self, token_id: &TokenIdentifier) -> SCResult<()> {
-        let roles = self.blockchain().get_esdt_local_roles(token_id);
-        require!(roles.contains(REQUIRED_ROLES), "ESDT local roles not set");
         Ok(())
     }
 
