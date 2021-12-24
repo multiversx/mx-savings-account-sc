@@ -172,7 +172,7 @@ pub trait TokensModule {
     #[storage_mapper("stakedTokenId")]
     fn staked_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
 
-    #[storage_mapper("tokenTicker")]
+    #[storage_mapper("stakedTokenTicker")]
     fn staked_token_ticker(&self) -> SingleValueMapper<ManagedBuffer>;
 
     #[view(getLendTokenId)]
