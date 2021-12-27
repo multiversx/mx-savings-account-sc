@@ -301,25 +301,28 @@ pub trait StakingRewardsModule:
             "Already calculated rewards this epoch"
         );
 
-        let (mut current_lend_nonce, mut total_rewards) = match self.load_operation() {
-            OngoingOperationType::None => (1u64, BigUint::zero()),
-            OngoingOperationType::CalculateTotalLenderRewards {
-                lend_nonce,
-                total_rewards,
-            } => (lend_nonce, total_rewards),
-            _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
-        };
-        let last_lend_nonce = self.blockchain().get_current_esdt_nft_nonce(
-            &self.blockchain().get_sc_address(),
-            &self.lend_token_id().get(),
-        );
+        let last_lend_nonce = self.last_valid_lend_nonce().get();
+        require!(last_lend_nonce > 0, "No lenders");
+
+        let (mut prev_lend_nonce, mut current_lend_nonce, mut total_rewards) =
+            match self.load_operation() {
+                OngoingOperationType::None => (0u64, self.get_first_lend_nonce(), BigUint::zero()),
+                OngoingOperationType::CalculateTotalLenderRewards {
+                    prev_lend_nonce,
+                    current_lend_nonce,
+                    total_rewards,
+                } => (prev_lend_nonce, current_lend_nonce, total_rewards),
+                _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
+            };
         let current_epoch = self.blockchain().get_block_epoch();
 
         let run_result = self.run_while_it_has_gas(
             || {
-                // TODO: Use something like a SetMapper or a custom mapper that will hold valid nonces
-                // There's no point in iterating over all the nonces and checking for empty over and over
-                if !self.lend_metadata(current_lend_nonce).is_empty() {
+                let next_lend_nonce = self.lend_nonces_list(current_lend_nonce).get();
+
+                if self.lend_metadata(current_lend_nonce).is_empty() {
+                    self.remove_lend_nonce(prev_lend_nonce, current_lend_nonce);
+                } else {
                     let metadata = self.lend_metadata(current_lend_nonce).get();
                     let reward_amount = self.compute_reward_amount(
                         &metadata.amount_in_circulation,
@@ -329,10 +332,11 @@ pub trait StakingRewardsModule:
                     );
 
                     total_rewards += reward_amount;
+                    prev_lend_nonce = current_lend_nonce;
                 }
 
-                current_lend_nonce += 1;
-                if current_lend_nonce > last_lend_nonce {
+                current_lend_nonce = next_lend_nonce;
+                if current_lend_nonce == 0 {
                     LoopOp::Break
                 } else {
                     LoopOp::Continue
@@ -364,7 +368,8 @@ pub trait StakingRewardsModule:
             }
             OperationCompletionStatus::InterruptedBeforeOutOfGas => {
                 self.save_progress(&OngoingOperationType::CalculateTotalLenderRewards {
-                    lend_nonce: current_lend_nonce,
+                    prev_lend_nonce,
+                    current_lend_nonce,
                     total_rewards,
                 });
             }

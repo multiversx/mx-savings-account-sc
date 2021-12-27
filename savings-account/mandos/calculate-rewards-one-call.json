@@ -51,8 +51,10 @@
                 "message": "",
                 "out": [
                     {
-                        "1-token_out": "nested:str:STABLE-123456",
-                        "2-amount_out": "biguint:10,000"
+                        "1-token-type": "u8:0",
+                        "2-token_id": "nested:str:STABLE-123456",
+                        "3-token_nonce": "u64:0",
+                        "4-amount": "biguint:10,000"
                     }
                 ],
                 "gas": "*",
