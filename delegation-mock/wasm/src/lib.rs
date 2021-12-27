@@ -1,5 +1,16 @@
+////////////////////////////////////////////////////
+////////////////// AUTO-GENERATED //////////////////
+////////////////////////////////////////////////////
 
 #![no_std]
 
-pub use delegation_mock::*;
-pub use elrond_wasm_output::*;
+elrond_wasm_node::wasm_endpoints! {
+    delegation_mock
+    (
+        init
+        claimRewards
+        stake
+    )
+}
+
+elrond_wasm_node::wasm_empty_callback! {}

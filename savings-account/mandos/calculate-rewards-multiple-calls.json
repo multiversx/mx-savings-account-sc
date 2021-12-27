@@ -20,7 +20,7 @@
                 "value": "0",
                 "function": "claimStakingRewards",
                 "arguments": [],
-                "gasLimit": "150,000,000",
+                "gasLimit": "140,000,000",
                 "gasPrice": "0"
             },
             "expect": {
@@ -269,7 +269,7 @@
                 "value": "0",
                 "function": "calculateTotalLenderRewards",
                 "arguments": [],
-                "gasLimit": "110,000,000",
+                "gasLimit": "100,000,000",
                 "gasPrice": "0"
             },
             "expect": {
