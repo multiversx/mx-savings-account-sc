@@ -95,7 +95,7 @@ pub trait SavingsAccount:
         self.last_staking_rewards_claim_epoch().set(&current_epoch);
 
         // init staking position list
-        self.staking_position(0).set(&StakingPosition {
+        self.staking_position(0).set_if_empty(&StakingPosition {
             liquid_staking_nonce: 0,
             next_pos_id: 0,
             prev_pos_id: 0,
@@ -122,20 +122,16 @@ pub trait SavingsAccount:
             "May only lend stablecoins"
         );
 
-        let lend_token_id = self.lend_token_id().get();
-        let sft_nonce = self.create_tokens(&lend_token_id, &payment_amount);
-
-        self.lend_metadata(sft_nonce).set(&LendMetadata {
-            lend_epoch: self.blockchain().get_block_epoch(),
-            amount_in_circulation: payment_amount.clone(),
-        });
+        let caller = self.blockchain().get_caller();
+        let sft_nonce = self.create_and_send_lend_tokens(&caller, &payment_amount);
 
         self.lended_amount()
             .update(|lended_amount| *lended_amount += &payment_amount);
 
-        let caller = self.blockchain().get_caller();
-        self.send()
-            .direct(&caller, &lend_token_id, sft_nonce, &payment_amount, &[]);
+        self.lend_metadata(sft_nonce).set(&LendMetadata {
+            lend_epoch: self.blockchain().get_block_epoch(),
+            amount_in_circulation: payment_amount,
+        });
 
         Ok(())
     }
@@ -167,8 +163,8 @@ pub trait SavingsAccount:
 
         require!(borrow_value > 0, "Deposit amount too low");
 
-        let borrow_token_id = self.borrow_token_id().get();
-        let borrow_token_nonce = self.create_tokens(&borrow_token_id, &payment_amount);
+        let caller = self.blockchain().get_caller();
+        let borrow_token_nonce = self.create_and_send_borrow_tokens(&caller, &payment_amount);
         let staking_pos_id = self.add_staking_position(payment_nonce);
 
         let lended_amount = self.lended_amount().get();
@@ -189,17 +185,7 @@ pub trait SavingsAccount:
                 amount_in_circulation: payment_amount.clone(),
             });
 
-        let caller = self.blockchain().get_caller();
-        let stablecoin_token_id = self.stablecoin_token_id().get();
-        self.send().direct(
-            &caller,
-            &borrow_token_id,
-            borrow_token_nonce,
-            &payment_amount,
-            &[],
-        );
-        self.send()
-            .direct(&caller, &stablecoin_token_id, 0, &borrow_value, &[]);
+        self.send_stablecoins(&caller, &borrow_value);
 
         Ok(())
     }
@@ -294,13 +280,7 @@ pub trait SavingsAccount:
         let caller = self.blockchain().get_caller();
         let extra_stablecoins_paid = stablecoin_amount - &total_stablecoins_needed;
         if extra_stablecoins_paid > 0u32 {
-            self.send().direct(
-                &caller,
-                &stablecoin_token_id,
-                0,
-                &extra_stablecoins_paid,
-                &[],
-            );
+            self.send_stablecoins(&caller, &extra_stablecoins_paid);
         }
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
@@ -318,13 +298,7 @@ pub trait SavingsAccount:
             self.remove_staking_position(borrow_metadata.staking_position_id);
         }
 
-        self.send().direct(
-            &caller,
-            &liquid_staking_token_id,
-            liquid_staking_nonce,
-            borrow_token_amount,
-            &[],
-        );
+        self.send_liquid_staking_tokens(&caller, liquid_staking_nonce, borrow_token_amount);
 
         Ok(())
     }
@@ -340,7 +314,6 @@ pub trait SavingsAccount:
         self.require_lend_token_issued()?;
         self.require_no_ongoing_operation()?;
 
-        let stablecoin_token_id = self.stablecoin_token_id().get();
         let lend_token_id = self.lend_token_id().get();
         require!(
             payment_token == lend_token_id,
@@ -370,13 +343,7 @@ pub trait SavingsAccount:
 
         let total_withdraw_amount = payment_amount + rewards_amount;
         let caller = self.blockchain().get_caller();
-        self.send().direct(
-            &caller,
-            &stablecoin_token_id,
-            0,
-            &total_withdraw_amount,
-            &[],
-        );
+        self.send_stablecoins(&caller, &total_withdraw_amount);
 
         Ok(())
     }
@@ -408,28 +375,21 @@ pub trait SavingsAccount:
         // burn old sfts
         self.burn_tokens(&lend_token_id, payment_nonce, &payment_amount);
 
-        // create sfts
-        let new_sft_nonce = self.create_tokens(&lend_token_id, &payment_amount);
+        // create and send new sfts, with updated metadata
+        let caller = self.blockchain().get_caller();
+        let new_sft_nonce = self.create_and_send_lend_tokens(&caller, &payment_amount);
         self.lend_metadata(new_sft_nonce).set(&LendMetadata {
             lend_epoch: last_calculate_rewards_epoch,
             amount_in_circulation: payment_amount.clone(),
         });
 
-        // send new SFTs, with updated metadata
-        let caller = self.blockchain().get_caller();
-        self.send()
-            .direct(&caller, &lend_token_id, new_sft_nonce, &payment_amount, &[]);
-
         // send rewards
         let rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
         self.unclaimed_rewards()
             .update(|unclaimed_rewards| *unclaimed_rewards -= &rewards_amount);
-
         self.update_lend_metadata(&mut lend_metadata, payment_nonce, &payment_amount);
 
-        let stablecoin_token_id = self.stablecoin_token_id().get();
-        self.send()
-            .direct(&caller, &stablecoin_token_id, 0, &rewards_amount, &[]);
+        self.send_stablecoins(&caller, &rewards_amount);
 
         Ok(())
     }

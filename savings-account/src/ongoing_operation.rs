@@ -9,7 +9,8 @@ pub const CALLBACK_IN_PROGRESS_ERR_MSG: &[u8] = b"Callback not executed yet";
 pub enum OngoingOperationType<M: ManagedTypeApi> {
     None,
     CalculateTotalLenderRewards {
-        lend_nonce: u64,
+        prev_lend_nonce: u64,
+        current_lend_nonce: u64,
         total_rewards: BigUint<M>,
     },
     ClaimStakingRewards {

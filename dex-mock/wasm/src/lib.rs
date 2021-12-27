@@ -1,5 +1,16 @@
+////////////////////////////////////////////////////
+////////////////// AUTO-GENERATED //////////////////
+////////////////////////////////////////////////////
 
 #![no_std]
 
-pub use dex_mock::*;
-pub use elrond_wasm_output::*;
+elrond_wasm_node::wasm_endpoints! {
+    dex_mock
+    (
+        init
+        deposit
+        swapTokensFixedInput
+    )
+}
+
+elrond_wasm_node::wasm_empty_callback! {}
