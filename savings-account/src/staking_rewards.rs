@@ -3,6 +3,7 @@ elrond_wasm::derive_imports!();
 
 use crate::ongoing_operation::{
     LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
+    NR_ROUNDS_WAIT_FOR_CALLBACK,
 };
 
 const RECEIVE_STAKING_REWARDS_FUNC_NAME: &[u8] = b"receiveStakingRewards";
@@ -65,6 +66,7 @@ pub trait StakingRewardsModule:
             "Already claimed this epoch"
         );
 
+        let current_round = self.blockchain().get_block_round();
         let mut pos_id = match self.load_operation() {
             OngoingOperationType::None => {
                 let first_pos_id = self.get_first_staking_position_id();
@@ -74,9 +76,14 @@ pub trait StakingRewardsModule:
             }
             OngoingOperationType::ClaimStakingRewards {
                 pos_id,
+                async_call_fire_round,
                 callback_executed,
             } => {
-                require!(callback_executed, CALLBACK_IN_PROGRESS_ERR_MSG);
+                let round_diff = current_round - async_call_fire_round;
+                require!(
+                    callback_executed || round_diff >= NR_ROUNDS_WAIT_FOR_CALLBACK,
+                    CALLBACK_IN_PROGRESS_ERR_MSG
+                );
 
                 let staking_pos = self.staking_position(pos_id).get();
                 staking_pos.next_pos_id
@@ -117,6 +124,7 @@ pub trait StakingRewardsModule:
         if let Some(last_pos_id) = callback_pos_ids.get(callback_pos_ids.len() - 1) {
             self.save_progress(&OngoingOperationType::ClaimStakingRewards {
                 pos_id: last_pos_id,
+                async_call_fire_round: current_round,
                 callback_executed: false,
             });
         }
@@ -155,10 +163,12 @@ pub trait StakingRewardsModule:
                 let last_pos_id = match self.load_operation() {
                     OngoingOperationType::ClaimStakingRewards {
                         pos_id,
+                        async_call_fire_round,
                         callback_executed: _,
                     } => {
                         self.save_progress(&OngoingOperationType::ClaimStakingRewards {
                             pos_id,
+                            async_call_fire_round,
                             callback_executed: true,
                         });
 
