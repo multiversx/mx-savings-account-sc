@@ -5,8 +5,8 @@ elrond_wasm::imports!();
 mod math;
 mod model;
 mod ongoing_operation;
-mod staking_rewards;
-mod tokens;
+pub mod staking_rewards;
+pub mod tokens;
 
 use model::*;
 use price_aggregator_proxy::*;
@@ -384,7 +384,21 @@ pub trait SavingsAccount:
         });
 
         // send rewards
-        let rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
+        let mut rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
+        let penalty_amount = self.penalty_amount_per_lender().get();
+        if penalty_amount > 0u32 {
+            rewards_amount -= &penalty_amount;
+
+            self.missing_rewards().update(|missing_rewards| {
+                // since we round up for penalty, this is possible if everyone claims
+                if *missing_rewards < penalty_amount {
+                    *missing_rewards = BigUint::zero();
+                } else {
+                    *missing_rewards -= penalty_amount;
+                }
+            })
+        }
+
         self.unclaimed_rewards()
             .update(|unclaimed_rewards| *unclaimed_rewards -= &rewards_amount);
         self.update_lend_metadata(&mut lend_metadata, payment_nonce, &payment_amount);

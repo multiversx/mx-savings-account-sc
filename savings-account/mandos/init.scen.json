@@ -55,7 +55,7 @@
         {
             "step": "scDeploy",
             "txId": "deploy-savings-account",
-            "comment": "75% loan to value, 0.5% lender rewards per epoch, 50% base borrow rate, 10% for borrow rate under/over factor, 75% opt util, 60% reserve factor",
+            "comment": "75% loan to value, 0.5% lender rewards per epoch, 50% base borrow rate, 10% for borrow rate under/over factor, 75% opt util",
             "tx": {
                 "from": "address:owner",
                 "contractCode": "file:../output/savings-account.wasm",

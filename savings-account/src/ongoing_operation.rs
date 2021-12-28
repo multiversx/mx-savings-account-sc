@@ -13,6 +13,7 @@ pub enum OngoingOperationType<M: ManagedTypeApi> {
         prev_lend_nonce: u64,
         current_lend_nonce: u64,
         total_rewards: BigUint<M>,
+        nr_lenders_with_rewards: u64,
     },
     ClaimStakingRewards {
         pos_id: u64,
