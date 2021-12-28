@@ -387,6 +387,8 @@ pub trait SavingsAccount:
         let mut rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
         let penalty_amount = self.penalty_amount_per_lender().get();
         if penalty_amount > 0u32 {
+            require!(rewards_amount > penalty_amount, "No rewards to claim");
+
             rewards_amount -= &penalty_amount;
 
             self.missing_rewards().update(|missing_rewards| {
