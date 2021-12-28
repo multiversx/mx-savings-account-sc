@@ -2,6 +2,7 @@ elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
 const MIN_GAS_TO_SAVE_PROGRESS: u64 = 100_000_000;
+pub const NR_ROUNDS_WAIT_FOR_CALLBACK: u64 = 100; // If the callback isn't executed after 100 rounds, then we clear the state and retry
 pub const ANOTHER_ONGOING_OP_ERR_MSG: &[u8] = b"Another ongoing operation is in progress";
 pub const CALLBACK_IN_PROGRESS_ERR_MSG: &[u8] = b"Callback not executed yet";
 
@@ -15,6 +16,7 @@ pub enum OngoingOperationType<M: ManagedTypeApi> {
     },
     ClaimStakingRewards {
         pos_id: u64,
+        async_call_fire_round: u64,
         callback_executed: bool,
     },
     ConvertStakingTokenToStablecoin,
