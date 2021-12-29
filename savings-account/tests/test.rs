@@ -1,5 +1,5 @@
 use elrond_wasm::types::{
-    Address, EsdtLocalRole, ManagedBuffer, OperationCompletionStatus, SCResult,
+    Address, EsdtLocalRole, ManagedBuffer, OperationCompletionStatus, OptionalArg, SCResult,
 };
 use elrond_wasm_debug::{
     managed_address, managed_biguint, managed_token_id, rust_biguint, testing_framework::*,
@@ -265,6 +265,7 @@ fn test_rewards_penalty() {
                 managed_token_id!(LEND_TOKEN_ID),
                 1,
                 managed_biguint!(100_000),
+                OptionalArg::None,
             );
             unwrap_or_panic(result);
 
@@ -330,6 +331,7 @@ fn test_rewards_penalty() {
                 managed_token_id!(LEND_TOKEN_ID),
                 2,
                 managed_biguint!(100_000),
+                OptionalArg::None,
             );
             unwrap_or_panic(result);
 

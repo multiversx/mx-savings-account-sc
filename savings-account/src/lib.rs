@@ -355,6 +355,7 @@ pub trait SavingsAccount:
         #[payment_token] payment_token: TokenIdentifier,
         #[payment_nonce] payment_nonce: u64,
         #[payment_amount] payment_amount: BigUint,
+        #[var_args] opt_reject_if_penalty: OptionalArg<bool>,
     ) -> SCResult<()> {
         self.require_lend_token_issued()?;
         self.require_no_ongoing_operation()?;
@@ -387,8 +388,13 @@ pub trait SavingsAccount:
         let mut rewards_amount = self.get_lender_claimable_rewards(payment_nonce, &payment_amount);
         let penalty_amount = self.penalty_amount_per_lender().get();
         if penalty_amount > 0u32 {
-            require!(rewards_amount > penalty_amount, "No rewards to claim");
+            let reject = match opt_reject_if_penalty {
+                OptionalArg::Some(r) => r,
+                OptionalArg::None => false,
+            };
+            require!(!reject, "Rewards have penalty");
 
+            require!(rewards_amount > penalty_amount, "No rewards to claim");
             rewards_amount -= &penalty_amount;
 
             self.missing_rewards().update(|missing_rewards| {
