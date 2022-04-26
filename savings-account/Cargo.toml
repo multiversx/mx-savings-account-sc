@@ -11,9 +11,18 @@ path = "src/lib.rs"
 [dependencies.elrond-wasm]
 version = "0.25.0"
 
+[dependencies.price-aggregator-proxy]
+git = "https://github.com/ElrondNetwork/sc-chainlink-rs"
+rev = "c3ed77b"
+
 [dev-dependencies.elrond-wasm-debug]
 version = "0.25.0"
 
-[dependencies.price-aggregator-proxy]
+[dev-dependencies]
+num-bigint = "0.4.2"
+num-traits = "0.2"
+hex = "0.4"
+
+[dev-dependencies.price-aggregator]
 git = "https://github.com/ElrondNetwork/sc-chainlink-rs"
 rev = "c3ed77b"

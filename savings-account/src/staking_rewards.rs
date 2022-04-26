@@ -314,16 +314,28 @@ pub trait StakingRewardsModule:
         let last_lend_nonce = self.last_valid_lend_nonce().get();
         require!(last_lend_nonce > 0, "No lenders");
 
-        let (mut prev_lend_nonce, mut current_lend_nonce, mut total_rewards) =
-            match self.load_operation() {
-                OngoingOperationType::None => (0u64, self.get_first_lend_nonce(), BigUint::zero()),
-                OngoingOperationType::CalculateTotalLenderRewards {
-                    prev_lend_nonce,
-                    current_lend_nonce,
-                    total_rewards,
-                } => (prev_lend_nonce, current_lend_nonce, total_rewards),
-                _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
-            };
+        let (
+            mut prev_lend_nonce,
+            mut current_lend_nonce,
+            mut total_rewards,
+            mut nr_lenders_with_rewards,
+        ) = match self.load_operation() {
+            OngoingOperationType::None => {
+                (0u64, self.get_first_lend_nonce(), BigUint::zero(), 0u64)
+            }
+            OngoingOperationType::CalculateTotalLenderRewards {
+                prev_lend_nonce,
+                current_lend_nonce,
+                total_rewards,
+                nr_lenders_with_rewards,
+            } => (
+                prev_lend_nonce,
+                current_lend_nonce,
+                total_rewards,
+                nr_lenders_with_rewards,
+            ),
+            _ => return sc_error!(ANOTHER_ONGOING_OP_ERR_MSG),
+        };
         let current_epoch = self.blockchain().get_block_epoch();
 
         let run_result = self.run_while_it_has_gas(
@@ -340,8 +352,11 @@ pub trait StakingRewardsModule:
                         current_epoch,
                         &reward_percentage_per_epoch,
                     );
+                    if reward_amount > 0u32 {
+                        nr_lenders_with_rewards += 1;
+                        total_rewards += reward_amount;
+                    }
 
-                    total_rewards += reward_amount;
                     prev_lend_nonce = current_lend_nonce;
                 }
 
@@ -355,25 +370,48 @@ pub trait StakingRewardsModule:
             None,
         )?;
 
+        let mut missing_rewards = self.missing_rewards().get();
+        total_rewards -= &missing_rewards;
+
         match run_result {
             OperationCompletionStatus::Completed => {
+                if nr_lenders_with_rewards == 0 {
+                    return Ok(run_result);
+                }
+
                 let prev_unclaimed_rewards = self.unclaimed_rewards().get();
                 let extra_unclaimed = &total_rewards - &prev_unclaimed_rewards;
-
-                // TODO: Maybe calculate by how much it's lower?
-                // For example, if 1000 is needed, but only 900 is available, that's 10% less
-                // So store this "10%" in storage and decrease everyone's rewards by 10% on lenderClaim?
                 let stablecoin_reserves = self.stablecoin_reserves().get();
-                require!(
-                    stablecoin_reserves >= extra_unclaimed,
-                    "Total rewards exceed reserves"
-                );
+
+                let mut leftover_reserves: BigUint;
+                if extra_unclaimed > stablecoin_reserves {
+                    let extra_missing_rewards = &extra_unclaimed - &stablecoin_reserves;
+                    total_rewards -= &extra_missing_rewards;
+                    missing_rewards += extra_missing_rewards;
+
+                    leftover_reserves = BigUint::zero();
+                } else {
+                    leftover_reserves = stablecoin_reserves - extra_unclaimed;
+                    if leftover_reserves >= missing_rewards {
+                        total_rewards += &missing_rewards;
+                        leftover_reserves -= &missing_rewards;
+                        missing_rewards = BigUint::zero();
+                    } else {
+                        total_rewards += &leftover_reserves;
+                        missing_rewards -= &leftover_reserves;
+                        leftover_reserves = BigUint::zero();
+                    }
+                }
+
+                // round up
+                let penalty_per_lender =
+                    (&missing_rewards + (nr_lenders_with_rewards - 1)) / nr_lenders_with_rewards;
+                self.penalty_amount_per_lender().set(&penalty_per_lender);
+                self.missing_rewards().set(&missing_rewards);
 
                 let current_epoch = self.blockchain().get_block_epoch();
                 self.last_calculate_rewards_epoch().set(&current_epoch);
                 self.unclaimed_rewards().set(&total_rewards);
-
-                let leftover_reserves = stablecoin_reserves - extra_unclaimed;
                 self.stablecoin_reserves().set(&leftover_reserves);
             }
             OperationCompletionStatus::InterruptedBeforeOutOfGas => {
@@ -381,6 +419,7 @@ pub trait StakingRewardsModule:
                     prev_lend_nonce,
                     current_lend_nonce,
                     total_rewards,
+                    nr_lenders_with_rewards,
                 });
             }
         };
@@ -499,6 +538,13 @@ pub trait StakingRewardsModule:
     #[view(getUnclaimedRewards)]
     #[storage_mapper("unclaimedRewards")]
     fn unclaimed_rewards(&self) -> SingleValueMapper<BigUint>;
+
+    #[storage_mapper("missingRewards")]
+    fn missing_rewards(&self) -> SingleValueMapper<BigUint>;
+
+    #[view(getPenaltyAmountPerLender)]
+    #[storage_mapper("penaltyAmountPerLender")]
+    fn penalty_amount_per_lender(&self) -> SingleValueMapper<BigUint>;
 
     #[view(getStablecoinReserves)]
     #[storage_mapper("stablecoinReserves")]
