@@ -14,13 +14,12 @@ pub trait MathModule {
         u_optimal: &BigUint,
         u_current: &BigUint,
     ) -> BigUint {
-        let bp = BigUint::from(BASE_PRECISION);
-
         if u_current < u_optimal {
             let utilisation_ratio = &(u_current * r_slope1) / u_optimal;
 
             r_base + &utilisation_ratio
         } else {
+            let bp = BigUint::from(BASE_PRECISION);
             let denominator = &bp - u_optimal;
             let numerator = &(u_current - u_optimal) * r_slope2;
 
@@ -33,8 +32,7 @@ pub trait MathModule {
         borrowed_amount: &BigUint,
         total_pool_reserves: &BigUint,
     ) -> BigUint {
-        let bp = BigUint::from(BASE_PRECISION);
-        &(borrowed_amount * &bp) / total_pool_reserves
+        (borrowed_amount * BASE_PRECISION) / total_pool_reserves
     }
 
     fn compute_staking_position_value(
@@ -54,8 +52,7 @@ pub trait MathModule {
         let epoch_diff = current_epoch - borrow_epoch;
 
         let bp = BigUint::from(BASE_PRECISION);
-        let epochs_year = BigUint::from(EPOCHS_IN_YEAR);
-        let time_unit_percentage = (&epoch_diff.into() * &bp) / epochs_year;
+        let time_unit_percentage = (&epoch_diff.into() * &bp) / EPOCHS_IN_YEAR;
         let debt_percetange = &(&time_unit_percentage * borrow_rate) / &bp;
 
         (&debt_percetange * amount) / bp
@@ -73,9 +70,8 @@ pub trait MathModule {
         }
 
         let epoch_diff = last_calculate_rewards_epoch - lend_epoch;
-        let bp = BigUint::from(BASE_PRECISION);
         let percentage = &epoch_diff.into() * reward_percentage_per_epoch;
 
-        (&percentage * amount) / bp
+        (&percentage * amount) / BASE_PRECISION
     }
 }

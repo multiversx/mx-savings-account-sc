@@ -20,7 +20,6 @@ pub enum OngoingOperationType<M: ManagedTypeApi> {
         async_call_fire_round: u64,
         callback_executed: bool,
     },
-    ConvertStakingTokenToStablecoin,
 }
 
 pub enum LoopOp<M: ManagedTypeApi> {
@@ -41,7 +40,7 @@ pub trait OngoingOperationModule {
         &self,
         mut process: Process,
         opt_additional_gas_reserve_per_iteration: Option<u64>,
-    ) -> SCResult<OperationCompletionStatus>
+    ) -> OperationCompletionStatus
     where
         Process: FnMut() -> LoopOp<Self::Api>,
     {
@@ -63,7 +62,7 @@ pub trait OngoingOperationModule {
 
             total_reserve_needed += additional_gas_reserve_per_iteration;
             if !self.can_continue_operation(gas_per_iteration, total_reserve_needed) {
-                return Ok(OperationCompletionStatus::InterruptedBeforeOutOfGas);
+                return OperationCompletionStatus::InterruptedBeforeOutOfGas;
             }
 
             loop_op = process();
@@ -71,7 +70,7 @@ pub trait OngoingOperationModule {
 
         self.clear_operation();
 
-        Ok(OperationCompletionStatus::Completed)
+        OperationCompletionStatus::Completed
     }
 
     fn can_continue_operation(&self, operation_cost: u64, extra_reserve_needed: u64) -> bool {
@@ -80,24 +79,26 @@ pub trait OngoingOperationModule {
         gas_left > MIN_GAS_TO_SAVE_PROGRESS + extra_reserve_needed + operation_cost
     }
 
+    #[inline]
     fn load_operation(&self) -> OngoingOperationType<Self::Api> {
         self.current_ongoing_operation().get()
     }
 
+    #[inline]
     fn save_progress(&self, operation: &OngoingOperationType<Self::Api>) {
         self.current_ongoing_operation().set(operation);
     }
 
+    #[inline]
     fn clear_operation(&self) {
         self.current_ongoing_operation().clear();
     }
 
-    fn require_no_ongoing_operation(&self) -> SCResult<()> {
+    fn require_no_ongoing_operation(&self) {
         require!(
             self.current_ongoing_operation().is_empty(),
             "Ongoing operation in progress"
         );
-        Ok(())
     }
 
     #[storage_mapper("currentOngoingOperation")]

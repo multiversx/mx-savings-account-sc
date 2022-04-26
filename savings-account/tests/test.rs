@@ -1,6 +1,5 @@
-use elrond_wasm::types::{
-    Address, EsdtLocalRole, ManagedBuffer, OperationCompletionStatus, OptionalArg, SCResult,
-};
+use elrond_wasm::elrond_codec::multi_types::OptionalValue;
+use elrond_wasm::types::{Address, EsdtLocalRole, ManagedBuffer, OperationCompletionStatus};
 use elrond_wasm_debug::{
     managed_address, managed_biguint, managed_token_id, rust_biguint, testing_framework::*,
     DebugApi,
@@ -26,8 +25,7 @@ const BORROW_TOKEN_ID: &[u8] = b"BORROW-123456";
 
 struct SavingsAccountSetup<SavingsAccountObjBuilder>
 where
-    SavingsAccountObjBuilder:
-        'static + Copy + Fn(DebugApi) -> savings_account::ContractObj<DebugApi>,
+    SavingsAccountObjBuilder: 'static + Copy + Fn() -> savings_account::ContractObj<DebugApi>,
 {
     pub blockchain_wrapper: BlockchainStateWrapper,
     pub owner_address: Address,
@@ -43,8 +41,7 @@ fn setup_savings_account<SavingsAccountObjBuilder>(
     sa_builder: SavingsAccountObjBuilder,
 ) -> SavingsAccountSetup<SavingsAccountObjBuilder>
 where
-    SavingsAccountObjBuilder:
-        'static + Copy + Fn(DebugApi) -> savings_account::ContractObj<DebugApi>,
+    SavingsAccountObjBuilder: 'static + Copy + Fn() -> savings_account::ContractObj<DebugApi>,
 {
     let rust_zero = rust_biguint!(0u64);
     let mut blockchain_wrapper = BlockchainStateWrapper::new();
@@ -111,30 +108,29 @@ where
         &(),
     );
 
-    blockchain_wrapper.execute_tx(&owner_address, &sa_wrapper, &rust_zero, |sc| {
-        let result = sc.init(
-            managed_token_id!(STABLECOIN_TOKEN_ID),
-            managed_token_id!(LIQUID_STAKING_TOKEN_ID),
-            managed_token_id!(STAKED_TOKEN_ID),
-            ManagedBuffer::new_from_bytes(STAKED_TOKEN_TICKER),
-            managed_address!(delegation_wrapper.address_ref()),
-            managed_address!(dex_wrapper.address_ref()),
-            managed_address!(price_aggregator_wrapper.address_ref()),
-            managed_biguint!(LOAN_TO_VALUE_PERCENTAGE),
-            managed_biguint!(LENDER_REWARDS_PERCENTAGE_PER_EPOCH),
-            managed_biguint!(BASE_BORROW_RATE),
-            managed_biguint!(BORROW_RATE_UNDER_OPTIMAL_FACTOR),
-            managed_biguint!(BORROW_RATE_OVER_OPTIMAL_FACTOR),
-            managed_biguint!(OPTIMAL_UTILISATION),
-        );
-        unwrap_or_panic(result);
+    blockchain_wrapper
+        .execute_tx(&owner_address, &sa_wrapper, &rust_zero, |sc| {
+            sc.init(
+                managed_token_id!(STABLECOIN_TOKEN_ID),
+                managed_token_id!(LIQUID_STAKING_TOKEN_ID),
+                managed_token_id!(STAKED_TOKEN_ID),
+                ManagedBuffer::new_from_bytes(STAKED_TOKEN_TICKER),
+                managed_address!(delegation_wrapper.address_ref()),
+                managed_address!(dex_wrapper.address_ref()),
+                managed_address!(price_aggregator_wrapper.address_ref()),
+                managed_biguint!(LOAN_TO_VALUE_PERCENTAGE),
+                managed_biguint!(LENDER_REWARDS_PERCENTAGE_PER_EPOCH),
+                managed_biguint!(BASE_BORROW_RATE),
+                managed_biguint!(BORROW_RATE_UNDER_OPTIMAL_FACTOR),
+                managed_biguint!(BORROW_RATE_OVER_OPTIMAL_FACTOR),
+                managed_biguint!(OPTIMAL_UTILISATION),
+            );
 
-        sc.lend_token_id().set(&managed_token_id!(LEND_TOKEN_ID));
-        sc.borrow_token_id()
-            .set(&managed_token_id!(BORROW_TOKEN_ID));
-
-        StateChange::Commit
-    });
+            sc.lend_token_id().set(&managed_token_id!(LEND_TOKEN_ID));
+            sc.borrow_token_id()
+                .set(&managed_token_id!(BORROW_TOKEN_ID));
+        })
+        .assert_ok();
 
     let roles = [
         EsdtLocalRole::NftCreate,
@@ -155,16 +151,6 @@ where
     }
 }
 
-fn unwrap_or_panic<T>(result: SCResult<T>) -> T {
-    match result {
-        SCResult::Ok(t) => t,
-        SCResult::Err(err) => {
-            let str = String::from_utf8(err.as_bytes().to_vec()).unwrap();
-            panic!("{}", str);
-        }
-    }
-}
-
 #[test]
 fn init_test() {
     let _ = setup_savings_account(savings_account::contract_obj);
@@ -177,101 +163,88 @@ fn test_rewards_penalty() {
 
     b_wrapper.set_block_epoch(20);
 
-    b_wrapper.execute_esdt_transfer(
-        &sa_setup.first_lender_address,
-        &sa_setup.sa_wrapper,
-        STABLECOIN_TOKEN_ID,
-        0,
-        &rust_biguint!(100_000),
-        |sc| {
-            let result = sc.lend(
-                managed_token_id!(STABLECOIN_TOKEN_ID),
-                managed_biguint!(100_000),
-            );
-            unwrap_or_panic(result);
+    b_wrapper
+        .execute_esdt_transfer(
+            &sa_setup.first_lender_address,
+            &sa_setup.sa_wrapper,
+            STABLECOIN_TOKEN_ID,
+            0,
+            &rust_biguint!(100_000),
+            |sc| {
+                sc.lend();
+            },
+        )
+        .assert_ok();
 
-            StateChange::Commit
-        },
-    );
-
-    b_wrapper.execute_esdt_transfer(
-        &sa_setup.second_lender_address,
-        &sa_setup.sa_wrapper,
-        STABLECOIN_TOKEN_ID,
-        0,
-        &rust_biguint!(100_000),
-        |sc| {
-            let result = sc.lend(
-                managed_token_id!(STABLECOIN_TOKEN_ID),
-                managed_biguint!(100_000),
-            );
-            unwrap_or_panic(result);
-
-            StateChange::Commit
-        },
-    );
+    b_wrapper
+        .execute_esdt_transfer(
+            &sa_setup.second_lender_address,
+            &sa_setup.sa_wrapper,
+            STABLECOIN_TOKEN_ID,
+            0,
+            &rust_biguint!(100_000),
+            |sc| {
+                sc.lend();
+            },
+        )
+        .assert_ok();
 
     b_wrapper.set_block_epoch(25);
 
     // set state required for calculate rewards to be callable
-    b_wrapper.execute_tx(
-        &sa_setup.owner_address,
-        &sa_setup.sa_wrapper,
-        &rust_biguint!(0),
-        |sc| {
-            sc.last_staking_rewards_claim_epoch().set(&25);
-            sc.last_staking_token_convert_epoch().set(&25);
-            sc.stablecoin_reserves().set(&managed_biguint!(500));
+    b_wrapper
+        .execute_tx(
+            &sa_setup.owner_address,
+            &sa_setup.sa_wrapper,
+            &rust_biguint!(0),
+            |sc| {
+                sc.last_staking_rewards_claim_epoch().set(&25);
+                sc.last_staking_token_convert_epoch().set(&25);
+                sc.stablecoin_reserves().set(&managed_biguint!(500));
+            },
+        )
+        .assert_ok();
 
-            StateChange::Commit
-        },
-    );
-
-    b_wrapper.execute_tx(
-        &sa_setup.owner_address,
-        &sa_setup.sa_wrapper,
-        &rust_biguint!(0),
-        |sc| {
-            let result = sc.calculate_total_lender_rewards();
-            let op_status = unwrap_or_panic(result);
-            assert_eq!(op_status, OperationCompletionStatus::Completed);
-
-            StateChange::Commit
-        },
-    );
+    b_wrapper
+        .execute_tx(
+            &sa_setup.owner_address,
+            &sa_setup.sa_wrapper,
+            &rust_biguint!(0),
+            |sc| {
+                let op_status = sc.calculate_total_lender_rewards();
+                assert_eq!(op_status, OperationCompletionStatus::Completed);
+            },
+        )
+        .assert_ok();
 
     // expected rewards is 0.5% * 100_000 * (5 epochs) = 2.5% * 100_000 = 2_500 per lender
     // i.e. 5_000 total rewards
-    b_wrapper.execute_query(&sa_setup.sa_wrapper, |sc| {
-        let unclaimed_rewards = sc.unclaimed_rewards().get();
-        assert_eq!(unclaimed_rewards, managed_biguint!(500));
+    b_wrapper
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            let unclaimed_rewards = sc.unclaimed_rewards().get();
+            assert_eq!(unclaimed_rewards, managed_biguint!(500));
 
-        let missing_rewards = sc.missing_rewards().get();
-        assert_eq!(missing_rewards, managed_biguint!(4_500));
+            let missing_rewards = sc.missing_rewards().get();
+            assert_eq!(missing_rewards, managed_biguint!(4_500));
 
-        let penalty_per_lender = sc.penalty_amount_per_lender().get();
-        assert_eq!(penalty_per_lender, managed_biguint!(2_250));
-    });
+            let penalty_per_lender = sc.penalty_amount_per_lender().get();
+            assert_eq!(penalty_per_lender, managed_biguint!(2_250));
+        })
+        .assert_ok();
 
     // lender 1 claim, should claim 2_500 - 2_250 = 250
-    b_wrapper.execute_esdt_transfer(
-        &sa_setup.first_lender_address,
-        &sa_setup.sa_wrapper,
-        LEND_TOKEN_ID,
-        1,
-        &rust_biguint!(100_000),
-        |sc| {
-            let result = sc.lender_claim_rewards(
-                managed_token_id!(LEND_TOKEN_ID),
-                1,
-                managed_biguint!(100_000),
-                OptionalArg::None,
-            );
-            unwrap_or_panic(result);
-
-            StateChange::Commit
-        },
-    );
+    b_wrapper
+        .execute_esdt_transfer(
+            &sa_setup.first_lender_address,
+            &sa_setup.sa_wrapper,
+            LEND_TOKEN_ID,
+            1,
+            &rust_biguint!(100_000),
+            |sc| {
+                sc.lender_claim_rewards(OptionalValue::None);
+            },
+        )
+        .assert_ok();
 
     b_wrapper.check_esdt_balance(
         &sa_setup.first_lender_address,
@@ -282,62 +255,57 @@ fn test_rewards_penalty() {
     // assume lender2 waited and claimed rewards later, when penalty was lifted
     b_wrapper.set_block_epoch(26);
 
-    b_wrapper.execute_tx(
-        &sa_setup.owner_address,
-        &sa_setup.sa_wrapper,
-        &rust_biguint!(0),
-        |sc| {
-            sc.last_staking_rewards_claim_epoch().set(&26);
-            sc.last_staking_token_convert_epoch().set(&26);
-            sc.stablecoin_reserves().set(&managed_biguint!(10_000));
+    b_wrapper
+        .execute_tx(
+            &sa_setup.owner_address,
+            &sa_setup.sa_wrapper,
+            &rust_biguint!(0),
+            |sc| {
+                sc.last_staking_rewards_claim_epoch().set(&26);
+                sc.last_staking_token_convert_epoch().set(&26);
+                sc.stablecoin_reserves().set(&managed_biguint!(10_000));
+            },
+        )
+        .assert_ok();
 
-            StateChange::Commit
-        },
-    );
+    b_wrapper
+        .execute_tx(
+            &sa_setup.owner_address,
+            &sa_setup.sa_wrapper,
+            &rust_biguint!(0),
+            |sc| {
+                let op_status = sc.calculate_total_lender_rewards();
+                assert_eq!(op_status, OperationCompletionStatus::Completed);
+            },
+        )
+        .assert_ok();
 
-    b_wrapper.execute_tx(
-        &sa_setup.owner_address,
-        &sa_setup.sa_wrapper,
-        &rust_biguint!(0),
-        |sc| {
-            let result = sc.calculate_total_lender_rewards();
-            let op_status = unwrap_or_panic(result);
-            assert_eq!(op_status, OperationCompletionStatus::Completed);
+    b_wrapper
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            let unclaimed_rewards = sc.unclaimed_rewards().get();
+            assert_eq!(unclaimed_rewards, managed_biguint!(3_500));
 
-            StateChange::Commit
-        },
-    );
+            let missing_rewards = sc.missing_rewards().get();
+            assert_eq!(missing_rewards, managed_biguint!(0));
 
-    b_wrapper.execute_query(&sa_setup.sa_wrapper, |sc| {
-        let unclaimed_rewards = sc.unclaimed_rewards().get();
-        assert_eq!(unclaimed_rewards, managed_biguint!(3_500));
-
-        let missing_rewards = sc.missing_rewards().get();
-        assert_eq!(missing_rewards, managed_biguint!(0));
-
-        let penalty_per_lender = sc.penalty_amount_per_lender().get();
-        assert_eq!(penalty_per_lender, managed_biguint!(0));
-    });
+            let penalty_per_lender = sc.penalty_amount_per_lender().get();
+            assert_eq!(penalty_per_lender, managed_biguint!(0));
+        })
+        .assert_ok();
 
     // lender 2 claim, will get the full amount of 3_000
-    b_wrapper.execute_esdt_transfer(
-        &sa_setup.second_lender_address,
-        &sa_setup.sa_wrapper,
-        LEND_TOKEN_ID,
-        2,
-        &rust_biguint!(100_000),
-        |sc| {
-            let result = sc.lender_claim_rewards(
-                managed_token_id!(LEND_TOKEN_ID),
-                2,
-                managed_biguint!(100_000),
-                OptionalArg::None,
-            );
-            unwrap_or_panic(result);
-
-            StateChange::Commit
-        },
-    );
+    b_wrapper
+        .execute_esdt_transfer(
+            &sa_setup.second_lender_address,
+            &sa_setup.sa_wrapper,
+            LEND_TOKEN_ID,
+            2,
+            &rust_biguint!(100_000),
+            |sc| {
+                sc.lender_claim_rewards(OptionalValue::None);
+            },
+        )
+        .assert_ok();
 
     b_wrapper.check_esdt_balance(
         &sa_setup.second_lender_address,

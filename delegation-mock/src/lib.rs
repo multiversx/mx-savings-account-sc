@@ -5,20 +5,18 @@ elrond_wasm::imports!();
 #[elrond_wasm::contract]
 pub trait DelegationMock {
     #[init]
-    fn init(&self, liquid_staking_token_id: TokenIdentifier) -> SCResult<()> {
+    fn init(&self, liquid_staking_token_id: TokenIdentifier) {
         require!(
             liquid_staking_token_id.is_valid_esdt_identifier(),
             "Invalid liquid staking token ID"
         );
 
         self.liquid_staking_token_id().set(&liquid_staking_token_id);
-
-        Ok(())
     }
 
     #[payable("EGLD")]
     #[endpoint]
-    fn stake(&self, #[payment_amount] payment_amount: BigUint) -> SCResult<()> {
+    fn stake(&self, #[payment_amount] payment_amount: BigUint) {
         require!(payment_amount > 0, "Must pay more than 0 EGLD");
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
@@ -32,8 +30,6 @@ pub trait DelegationMock {
             &payment_amount,
             &[],
         );
-
-        Ok(())
     }
 
     #[payable("*")]
@@ -41,8 +37,8 @@ pub trait DelegationMock {
     fn claim_rewards(
         &self,
         #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>,
-        #[var_args] opt_receive_funds_func: OptionalArg<ManagedBuffer>,
-    ) -> SCResult<()> {
+        #[var_args] opt_receive_funds_func: OptionalValue<ManagedBuffer>,
+    ) {
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
 
         let mut new_tokens = ManagedVec::new();
@@ -74,17 +70,19 @@ pub trait DelegationMock {
         let caller = self.blockchain().get_caller();
 
         match opt_receive_funds_func {
-            OptionalArg::None => {
+            OptionalValue::None => {
                 self.send()
                     .direct(&caller, &TokenIdentifier::egld(), 0, &rewards_amount, &[])
             }
-            OptionalArg::Some(func_name) => self.raw_vm_api().direct_egld_execute(
-                &caller,
-                &rewards_amount,
-                self.blockchain().get_gas_left() / 4,
-                &func_name,
-                &ManagedArgBuffer::new_empty(),
-            )?,
+            OptionalValue::Some(func_name) => {
+                let _ = Self::Api::send_api_impl().direct_egld_execute(
+                    &caller,
+                    &rewards_amount,
+                    self.blockchain().get_gas_left() / 4,
+                    &func_name,
+                    &ManagedArgBuffer::new_empty(),
+                );
+            }
         }
 
         self.send().transfer_multiple_esdt_via_async_call(

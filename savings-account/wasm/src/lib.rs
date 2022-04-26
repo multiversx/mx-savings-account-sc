@@ -7,7 +7,6 @@
 elrond_wasm_node::wasm_endpoints! {
     savings_account
     (
-        init
         callBack
         borrow
         calculateTotalLenderRewards
@@ -27,6 +26,7 @@ elrond_wasm_node::wasm_endpoints! {
         getLenderRewardsPercentagePerEpoch
         getLiquidStakingTokenId
         getLoadToValuePercentage
+        getPenaltyAmountPerLender
         getStablecoinReserves
         getStablecoinTokenId
         getStakedTokenId
@@ -36,10 +36,7 @@ elrond_wasm_node::wasm_endpoints! {
         lend
         lenderClaimRewards
         receiveStakingRewards
-        receive_stablecoin_after_convert
         repay
-        setBorrowTokenRoles
-        setLendTokenRoles
         setPriceAggregatorAddress
         withdraw
     )
