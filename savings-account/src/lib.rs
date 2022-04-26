@@ -5,6 +5,7 @@ elrond_wasm::imports!();
 mod math;
 mod model;
 mod ongoing_operation;
+mod price_aggregator_proxy;
 pub mod staking_rewards;
 pub mod tokens;
 
@@ -13,7 +14,7 @@ use price_aggregator_proxy::*;
 
 use crate::staking_rewards::StakingPosition;
 
-const REPAY_INVALID_PAYMENTS_ERR_MSG: &[u8] =
+static REPAY_INVALID_PAYMENTS_ERR_MSG: &[u8] =
     b"Must send exactly 2 types of tokens: Borrow SFTs and Stablecoins";
 
 #[elrond_wasm::contract]
@@ -41,7 +42,7 @@ pub trait SavingsAccount:
         borrow_rate_under_opt_factor: BigUint,
         borrow_rate_over_opt_factor: BigUint,
         optimal_utilisation: BigUint,
-    ) -> SCResult<()> {
+    ) {
         require!(
             stablecoin_token_id.is_valid_esdt_identifier(),
             "Invalid stablecoin token ID"
@@ -100,8 +101,6 @@ pub trait SavingsAccount:
             next_pos_id: 0,
             prev_pos_id: 0,
         });
-
-        Ok(())
     }
 
     // endpoints
@@ -112,9 +111,9 @@ pub trait SavingsAccount:
         &self,
         #[payment_token] payment_token: TokenIdentifier,
         #[payment_amount] payment_amount: BigUint,
-    ) -> SCResult<()> {
-        self.require_lend_token_issued()?;
-        self.require_no_ongoing_operation()?;
+    ) {
+        self.require_lend_token_issued();
+        self.require_no_ongoing_operation();
 
         let stablecoin_token_id = self.stablecoin_token_id().get();
         require!(
@@ -132,8 +131,6 @@ pub trait SavingsAccount:
             lend_epoch: self.blockchain().get_block_epoch(),
             amount_in_circulation: payment_amount,
         });
-
-        Ok(())
     }
 
     #[payable("*")]
@@ -143,9 +140,9 @@ pub trait SavingsAccount:
         #[payment_token] payment_token: TokenIdentifier,
         #[payment_nonce] payment_nonce: u64,
         #[payment_amount] payment_amount: BigUint,
-    ) -> SCResult<()> {
-        self.require_borrow_token_issued()?;
-        self.require_no_ongoing_operation()?;
+    ) {
+        self.require_borrow_token_issued();
+        self.require_no_ongoing_operation();
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         require!(
@@ -153,7 +150,7 @@ pub trait SavingsAccount:
             "May only use liquid staking position as collateral"
         );
 
-        let staked_token_value_in_dollars = self.get_staked_token_value_in_dollars()?;
+        let staked_token_value_in_dollars = self.get_staked_token_value_in_dollars();
         let staking_position_value =
             self.compute_staking_position_value(&staked_token_value_in_dollars, &payment_amount);
 
@@ -174,8 +171,7 @@ pub trait SavingsAccount:
                 *total_borrowed <= lended_amount,
                 "Not have enough funds to lend"
             );
-            Ok(())
-        })?;
+        });
 
         self.borrow_metadata(borrow_token_nonce)
             .set(&BorrowMetadata {
@@ -186,26 +182,18 @@ pub trait SavingsAccount:
             });
 
         self.send_stablecoins(&caller, &borrow_value);
-
-        Ok(())
     }
 
     #[payable("*")]
     #[endpoint]
-    fn repay(
-        &self,
-        #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>,
-    ) -> SCResult<()> {
-        self.require_borrow_token_issued()?;
-        self.require_no_ongoing_operation()?;
+    fn repay(&self, #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>) {
+        self.require_borrow_token_issued();
+        self.require_no_ongoing_operation();
 
-        let first_payment = payments.get(0).ok_or(REPAY_INVALID_PAYMENTS_ERR_MSG)?;
-        let second_payment = payments.get(1).ok_or(REPAY_INVALID_PAYMENTS_ERR_MSG)?;
+        require!(payments.len() == 2, REPAY_INVALID_PAYMENTS_ERR_MSG);
 
-        require!(
-            payments.len() == 2,
-            "Must send exactly 2 types of tokens: Borrow SFTs and Stablecoins"
-        );
+        let first_payment = payments.get(0);
+        let second_payment = payments.get(1);
 
         let stablecoin_token_id = self.stablecoin_token_id().get();
         let borrow_token_id = self.borrow_token_id().get();
@@ -243,7 +231,7 @@ pub trait SavingsAccount:
             &current_utilisation,
         );
 
-        let staked_token_value_in_dollars = self.get_staked_token_value_in_dollars()?;
+        let staked_token_value_in_dollars = self.get_staked_token_value_in_dollars();
         let staking_position_current_value = self
             .compute_staking_position_value(&staked_token_value_in_dollars, borrow_token_amount);
 
@@ -299,8 +287,6 @@ pub trait SavingsAccount:
         }
 
         self.send_liquid_staking_tokens(&caller, liquid_staking_nonce, borrow_token_amount);
-
-        Ok(())
     }
 
     #[payable("*")]
@@ -310,9 +296,9 @@ pub trait SavingsAccount:
         #[payment_token] payment_token: TokenIdentifier,
         #[payment_nonce] payment_nonce: u64,
         #[payment_amount] payment_amount: BigUint,
-    ) -> SCResult<()> {
-        self.require_lend_token_issued()?;
-        self.require_no_ongoing_operation()?;
+    ) {
+        self.require_lend_token_issued();
+        self.require_no_ongoing_operation();
 
         let lend_token_id = self.lend_token_id().get();
         require!(
@@ -344,8 +330,6 @@ pub trait SavingsAccount:
         let total_withdraw_amount = payment_amount + rewards_amount;
         let caller = self.blockchain().get_caller();
         self.send_stablecoins(&caller, &total_withdraw_amount);
-
-        Ok(())
     }
 
     #[payable("*")]
@@ -355,10 +339,10 @@ pub trait SavingsAccount:
         #[payment_token] payment_token: TokenIdentifier,
         #[payment_nonce] payment_nonce: u64,
         #[payment_amount] payment_amount: BigUint,
-        #[var_args] opt_reject_if_penalty: OptionalArg<bool>,
-    ) -> SCResult<()> {
-        self.require_lend_token_issued()?;
-        self.require_no_ongoing_operation()?;
+        #[var_args] opt_reject_if_penalty: OptionalValue<bool>,
+    ) {
+        self.require_lend_token_issued();
+        self.require_no_ongoing_operation();
 
         let lend_token_id = self.lend_token_id().get();
         require!(
@@ -389,8 +373,8 @@ pub trait SavingsAccount:
         let penalty_amount = self.penalty_amount_per_lender().get();
         if penalty_amount > 0u32 {
             let reject = match opt_reject_if_penalty {
-                OptionalArg::Some(r) => r,
-                OptionalArg::None => false,
+                OptionalValue::Some(r) => r,
+                OptionalValue::None => false,
             };
             require!(!reject, "Rewards have penalty");
 
@@ -412,8 +396,6 @@ pub trait SavingsAccount:
         self.update_lend_metadata(&mut lend_metadata, payment_nonce, &payment_amount);
 
         self.send_stablecoins(&caller, &rewards_amount);
-
-        Ok(())
     }
 
     // views
@@ -438,11 +420,11 @@ pub trait SavingsAccount:
 
     // private
 
-    fn get_staked_token_value_in_dollars(&self) -> SCResult<BigUint> {
+    fn get_staked_token_value_in_dollars(&self) -> BigUint {
         let staked_token_ticker = self.staked_token_ticker().get();
         let opt_price = self.get_price_for_pair(staked_token_ticker, DOLLAR_TICKER.into());
 
-        opt_price.ok_or("Failed to get staked token price").into()
+        opt_price.unwrap_or_else(|| sc_panic!("Failed to get staked token price"))
     }
 
     fn get_staking_amount_for_position(&self, sft_nonce: u64) -> BigUint {

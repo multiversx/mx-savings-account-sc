@@ -5,11 +5,6 @@ use crate::model::{BorrowMetadata, LendMetadata};
 
 const LEND_TOKEN_TICKER: &[u8] = b"LEND";
 const BORROW_TOKEN_TICKER: &[u8] = b"BORROW";
-const REQUIRED_ROLES: EsdtLocalRoleFlags = EsdtLocalRoleFlags::from_bits_truncate(
-    EsdtLocalRoleFlags::NFT_CREATE.bits()
-        | EsdtLocalRoleFlags::NFT_ADD_QUANTITY.bits()
-        | EsdtLocalRoleFlags::NFT_BURN.bits(),
-);
 
 // only for readability in storage mappers
 pub type CurrentLendNonce = u64;
@@ -26,9 +21,16 @@ pub trait TokensModule {
         &self,
         #[payment_amount] payment_amount: BigUint,
         token_name: ManagedBuffer,
-    ) -> SCResult<AsyncCall> {
+        num_decimals: usize,
+    ) {
         require!(self.lend_token_id().is_empty(), "Lend token already issued");
-        Ok(self.issue_token(payment_amount, token_name, LEND_TOKEN_TICKER.into()))
+        self.issue_token(
+            payment_amount,
+            token_name,
+            LEND_TOKEN_TICKER.into(),
+            num_decimals,
+        )
+        .call_and_exit();
     }
 
     #[only_owner]
@@ -38,30 +40,19 @@ pub trait TokensModule {
         &self,
         #[payment_amount] payment_amount: BigUint,
         token_name: ManagedBuffer,
-    ) -> SCResult<AsyncCall> {
+        num_decimals: usize,
+    ) {
         require!(
             self.borrow_token_id().is_empty(),
             "Borrow token already issued"
         );
-        Ok(self.issue_token(payment_amount, token_name, BORROW_TOKEN_TICKER.into()))
-    }
-
-    #[only_owner]
-    #[endpoint(setLendTokenRoles)]
-    fn set_lend_token_roles(&self) -> SCResult<AsyncCall> {
-        self.require_lend_token_issued()?;
-
-        let lend_token_id = self.lend_token_id().get();
-        Ok(self.set_roles(lend_token_id))
-    }
-
-    #[only_owner]
-    #[endpoint(setBorrowTokenRoles)]
-    fn set_borrow_token_roles(&self) -> SCResult<AsyncCall> {
-        self.require_borrow_token_issued()?;
-
-        let borrow_token_id = self.borrow_token_id().get();
-        Ok(self.set_roles(borrow_token_id))
+        self.issue_token(
+            payment_amount,
+            token_name,
+            BORROW_TOKEN_TICKER.into(),
+            num_decimals,
+        )
+        .call_and_exit();
     }
 
     // private
@@ -71,33 +62,18 @@ pub trait TokensModule {
         issue_cost: BigUint,
         token_name: ManagedBuffer,
         token_ticker: ManagedBuffer,
+        num_decimals: usize,
     ) -> AsyncCall {
-        ESDTSystemSmartContractProxy::new_proxy_obj(self.raw_vm_api())
-            .issue_semi_fungible(
+        ESDTSystemSmartContractProxy::new_proxy_obj()
+            .issue_and_set_all_roles(
                 issue_cost,
-                &token_name,
-                &token_ticker,
-                SemiFungibleTokenProperties {
-                    can_freeze: true,
-                    can_wipe: true,
-                    can_pause: true,
-                    can_change_owner: false,
-                    can_upgrade: false,
-                    can_add_special_roles: true,
-                },
+                token_name,
+                token_ticker.clone(),
+                EsdtTokenType::Meta,
+                num_decimals,
             )
             .async_call()
             .with_callback(self.callbacks().issue_callback(token_ticker))
-    }
-
-    fn set_roles(&self, token_id: TokenIdentifier) -> AsyncCall {
-        ESDTSystemSmartContractProxy::new_proxy_obj(self.raw_vm_api())
-            .set_special_roles(
-                &self.blockchain().get_sc_address(),
-                &token_id,
-                REQUIRED_ROLES.iter_roles().cloned(),
-            )
-            .async_call()
     }
 
     fn create_and_send_lend_tokens(&self, to: &ManagedAddress, amount: &BigUint) -> u64 {
@@ -149,17 +125,15 @@ pub trait TokensModule {
         self.send().esdt_local_burn(token_id, nonce, amount);
     }
 
-    fn require_lend_token_issued(&self) -> SCResult<()> {
+    fn require_lend_token_issued(&self) {
         require!(!self.lend_token_id().is_empty(), "Lend token not issued");
-        Ok(())
     }
 
-    fn require_borrow_token_issued(&self) -> SCResult<()> {
+    fn require_borrow_token_issued(&self) {
         require!(
             !self.borrow_token_id().is_empty(),
             "Borrow token not issued"
         );
-        Ok(())
     }
 
     fn get_first_lend_nonce(&self) -> u64 {
