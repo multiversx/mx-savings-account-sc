@@ -171,10 +171,7 @@ fn test_rewards_penalty() {
             0,
             &rust_biguint!(100_000),
             |sc| {
-                sc.lend(
-                    managed_token_id!(STABLECOIN_TOKEN_ID),
-                    managed_biguint!(100_000),
-                );
+                sc.lend();
             },
         )
         .assert_ok();
@@ -187,10 +184,7 @@ fn test_rewards_penalty() {
             0,
             &rust_biguint!(100_000),
             |sc| {
-                sc.lend(
-                    managed_token_id!(STABLECOIN_TOKEN_ID),
-                    managed_biguint!(100_000),
-                );
+                sc.lend();
             },
         )
         .assert_ok();
@@ -247,12 +241,7 @@ fn test_rewards_penalty() {
             1,
             &rust_biguint!(100_000),
             |sc| {
-                sc.lender_claim_rewards(
-                    managed_token_id!(LEND_TOKEN_ID),
-                    1,
-                    managed_biguint!(100_000),
-                    OptionalValue::None,
-                );
+                sc.lender_claim_rewards(OptionalValue::None);
             },
         )
         .assert_ok();
@@ -313,12 +302,7 @@ fn test_rewards_penalty() {
             2,
             &rust_biguint!(100_000),
             |sc| {
-                sc.lender_claim_rewards(
-                    managed_token_id!(LEND_TOKEN_ID),
-                    2,
-                    managed_biguint!(100_000),
-                    OptionalValue::None,
-                );
+                sc.lender_claim_rewards(OptionalValue::None);
             },
         )
         .assert_ok();

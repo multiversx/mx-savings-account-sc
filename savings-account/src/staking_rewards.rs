@@ -258,11 +258,8 @@ pub trait StakingRewardsModule:
     // we do not check the caller here to save gas, as the DEX SC only allocates very little gas for this call
     #[payable("*")]
     #[endpoint]
-    fn receive_stablecoin_after_convert(
-        &self,
-        #[payment_token] payment_token: TokenIdentifier,
-        #[payment_amount] payment_amount: BigUint,
-    ) {
+    fn receive_stablecoin_after_convert(&self) {
+        let (payment_amount, payment_token) = self.call_value().payment_token_pair();
         let stablecoin_token_id = self.stablecoin_token_id().get();
         require!(
             payment_token == stablecoin_token_id,

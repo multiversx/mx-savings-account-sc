@@ -80,14 +80,17 @@ pub trait OngoingOperationModule {
         gas_left > MIN_GAS_TO_SAVE_PROGRESS + extra_reserve_needed + operation_cost
     }
 
+    #[inline]
     fn load_operation(&self) -> OngoingOperationType<Self::Api> {
         self.current_ongoing_operation().get()
     }
 
+    #[inline]
     fn save_progress(&self, operation: &OngoingOperationType<Self::Api>) {
         self.current_ongoing_operation().set(operation);
     }
 
+    #[inline]
     fn clear_operation(&self) {
         self.current_ongoing_operation().clear();
     }

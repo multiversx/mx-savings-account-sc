@@ -17,13 +17,10 @@ pub trait TokensModule {
     #[only_owner]
     #[payable("EGLD")]
     #[endpoint(issueLendToken)]
-    fn issue_lend_token(
-        &self,
-        #[payment_amount] payment_amount: BigUint,
-        token_name: ManagedBuffer,
-        num_decimals: usize,
-    ) {
+    fn issue_lend_token(&self, token_name: ManagedBuffer, num_decimals: usize) {
         require!(self.lend_token_id().is_empty(), "Lend token already issued");
+
+        let payment_amount = self.call_value().egld_value();
         self.issue_token(
             payment_amount,
             token_name,
@@ -36,16 +33,13 @@ pub trait TokensModule {
     #[only_owner]
     #[payable("EGLD")]
     #[endpoint(issueBorrowToken)]
-    fn issue_borrow_token(
-        &self,
-        #[payment_amount] payment_amount: BigUint,
-        token_name: ManagedBuffer,
-        num_decimals: usize,
-    ) {
+    fn issue_borrow_token(&self, token_name: ManagedBuffer, num_decimals: usize) {
         require!(
             self.borrow_token_id().is_empty(),
             "Borrow token already issued"
         );
+
+        let payment_amount = self.call_value().egld_value();
         self.issue_token(
             payment_amount,
             token_name,
