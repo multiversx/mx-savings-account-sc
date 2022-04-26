@@ -5,7 +5,7 @@ pub const DOLLAR_TICKER: &[u8] = b"USD";
 pub type AggregatorResultAsMultiResult<M> =
     MultiValue5<u32, ManagedBuffer<M>, ManagedBuffer<M>, BigUint<M>, u8>;
 
-mod price_aggregator_proxy {
+mod price_aggregator_proxy_def {
     elrond_wasm::imports!();
 
     #[elrond_wasm::proxy]
@@ -78,14 +78,14 @@ pub trait PriceAggregatorModule {
             .latest_price_feed_optional(from_ticker, to_ticker)
             .execute_on_dest_context();
 
-        result
-            .into_option()
-            .map(|multi_result| AggregatorResult::from(multi_result))
+        result.into_option().map(AggregatorResult::from)
     }
 
     #[proxy]
-    fn aggregator_proxy(&self, address: ManagedAddress)
-        -> price_aggregator_proxy::Proxy<Self::Api>;
+    fn aggregator_proxy(
+        &self,
+        address: ManagedAddress,
+    ) -> price_aggregator_proxy_def::Proxy<Self::Api>;
 
     #[view(getAggregatorAddress)]
     #[storage_mapper("priceAggregatorAddress")]
