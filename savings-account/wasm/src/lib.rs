@@ -36,7 +36,6 @@ elrond_wasm_node::wasm_endpoints! {
         lend
         lenderClaimRewards
         receiveStakingRewards
-        receive_stablecoin_after_convert
         repay
         setPriceAggregatorAddress
         withdraw

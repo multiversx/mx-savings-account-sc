@@ -22,8 +22,7 @@ mod dex_proxy {
             #[payment_amount] amount_in: BigUint,
             token_out: TokenIdentifier,
             amount_out_min: BigUint,
-            #[var_args] opt_accept_funds_func: OptionalValue<ManagedBuffer>,
-        );
+        ) -> EsdtTokenPayment<Self::Api>;
     }
 }
 
@@ -237,53 +236,24 @@ pub trait StakingRewardsModule:
         let staking_token_balance = self.blockchain().get_sc_balance(&staking_token_id, 0);
         let stablecoin_token_id = self.stablecoin_token_id().get();
 
-        self.save_progress(&OngoingOperationType::ConvertStakingTokenToStablecoin);
-
-        self.dex_proxy(dex_sc_address)
+        let received_payment: EsdtTokenPayment<Self::Api> = self
+            .dex_proxy(dex_sc_address)
             .swap_tokens_fixed_input(
                 staking_token_id,
                 staking_token_balance,
-                stablecoin_token_id,
-                BigUint::zero(),
-                OptionalValue::Some(b"receive_stablecoin_after_convert"[..].into()),
+                stablecoin_token_id.clone(),
+                1u32.into(),
             )
-            .async_call()
-            .with_callback(
-                <Self as StakingRewardsModule>::callbacks(self).convert_staking_token_callback(),
-            )
-            .call_and_exit();
-    }
+            .execute_on_dest_context();
 
-    // name is intentionally left without camel case to decrease the chance of accidental calls by users
-    // we do not check the caller here to save gas, as the DEX SC only allocates very little gas for this call
-    #[payable("*")]
-    #[endpoint]
-    fn receive_stablecoin_after_convert(&self) {
-        let (payment_amount, payment_token) = self.call_value().payment_token_pair();
-        let stablecoin_token_id = self.stablecoin_token_id().get();
         require!(
-            payment_token == stablecoin_token_id,
-            "May only receive stablecoins"
+            received_payment.token_identifier == stablecoin_token_id,
+            "Invalid token received from PAIR swap"
         );
 
         self.stablecoin_reserves()
-            .update(|stablecoin_reserves| *stablecoin_reserves += payment_amount);
-    }
-
-    #[callback]
-    fn convert_staking_token_callback(
-        &self,
-        #[call_result] result: ManagedAsyncCallResult<MultiValueEncoded<ManagedBuffer>>,
-    ) {
-        match result {
-            ManagedAsyncCallResult::Ok(_) => {
-                let current_epoch = self.blockchain().get_block_epoch();
-                self.last_staking_token_convert_epoch().set(&current_epoch);
-            }
-            ManagedAsyncCallResult::Err(_) => {}
-        }
-
-        self.clear_operation();
+            .update(|stablecoin_reserves| *stablecoin_reserves += received_payment.amount);
+        self.last_staking_token_convert_epoch().set(current_epoch);
     }
 
     #[endpoint(calculateTotalLenderRewards)]

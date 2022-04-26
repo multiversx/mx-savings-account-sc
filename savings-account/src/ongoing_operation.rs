@@ -20,7 +20,6 @@ pub enum OngoingOperationType<M: ManagedTypeApi> {
         async_call_fire_round: u64,
         callback_executed: bool,
     },
-    ConvertStakingTokenToStablecoin,
 }
 
 pub enum LoopOp<M: ManagedTypeApi> {
