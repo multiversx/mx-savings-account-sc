@@ -92,15 +92,7 @@ pub trait TokensModule {
     }
 
     fn create_tokens(&self, token_id: &TokenIdentifier, amount: &BigUint) -> u64 {
-        self.send().esdt_nft_create(
-            token_id,
-            amount,
-            &ManagedBuffer::new(),
-            &BigUint::zero(),
-            &ManagedBuffer::new(),
-            &(),
-            &ManagedVec::new(),
-        )
+        self.send().esdt_nft_create_compact(token_id, amount, &())
     }
 
     fn send_stablecoins(&self, to: &ManagedAddress, amount: &BigUint) {
