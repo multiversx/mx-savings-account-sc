@@ -32,7 +32,7 @@ pub trait MathModule {
         borrowed_amount: &BigUint,
         total_pool_reserves: &BigUint,
     ) -> BigUint {
-        &(borrowed_amount * BASE_PRECISION) / total_pool_reserves
+        (borrowed_amount * BASE_PRECISION) / total_pool_reserves
     }
 
     fn compute_staking_position_value(
