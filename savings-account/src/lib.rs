@@ -397,7 +397,14 @@ pub trait SavingsAccount:
     fn get_lender_claimable_rewards_view(&self, sft_nonce: u64, sft_amount: BigUint) -> BigUint {
         self.update_global_lender_rewards();
 
-        self.get_lender_claimable_rewards(sft_nonce, &sft_amount)
+        let rewards = self.get_lender_claimable_rewards(sft_nonce, &sft_amount);
+        let penalty = self.penalty_amount_per_lender().get();
+
+        if rewards > penalty {
+            rewards - penalty
+        } else {
+            BigUint::zero()
+        }
     }
 
     fn get_lender_claimable_rewards(&self, sft_nonce: u64, sft_amount: &BigUint) -> BigUint {
