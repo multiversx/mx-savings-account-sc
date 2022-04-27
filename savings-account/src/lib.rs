@@ -394,6 +394,12 @@ pub trait SavingsAccount:
     }
 
     #[view(getLenderClaimableRewards)]
+    fn get_lender_claimable_rewards_view(&self, sft_nonce: u64, sft_amount: BigUint) -> BigUint {
+        self.update_global_lender_rewards();
+
+        self.get_lender_claimable_rewards(sft_nonce, &sft_amount)
+    }
+
     fn get_lender_claimable_rewards(&self, sft_nonce: u64, sft_amount: &BigUint) -> BigUint {
         if self.lend_metadata(sft_nonce).is_empty() {
             return BigUint::zero();
