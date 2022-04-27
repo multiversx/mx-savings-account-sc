@@ -9,7 +9,6 @@ elrond_wasm_node::wasm_endpoints! {
     (
         callBack
         borrow
-        calculateTotalLenderRewards
         claimStakingRewards
         convertStakingTokenToStablecoin
         getAggregatorAddress
@@ -17,7 +16,6 @@ elrond_wasm_node::wasm_endpoints! {
         getBorrowTokenId
         getDelegationScAddress
         getDexSwapScAddress
-        getLastCalculateRewardsEpoch
         getLastStakingRewardsClaimEpoch
         getLastStakingTokenConvertEpoch
         getLendTokenId

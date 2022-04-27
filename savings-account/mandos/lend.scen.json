@@ -85,6 +85,7 @@
                             "2-amount_in_circulation": "biguint:100,000"
                         },
                         "str:lendedAmount": "100,000",
+                        "str:nrLenders": "1",
                         "+": ""
                     },
                     "owner": "address:owner",
@@ -223,6 +224,7 @@
                             "2-amount_in_circulation": "biguint:50,000"
                         },
                         "str:lendedAmount": "150,000",
+                        "str:nrLenders": "2",
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"

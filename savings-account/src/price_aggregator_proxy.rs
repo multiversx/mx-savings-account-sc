@@ -1,6 +1,6 @@
 elrond_wasm::imports!();
 
-pub const DOLLAR_TICKER: &[u8] = b"USD";
+pub static DOLLAR_TICKER: &[u8] = b"USD";
 
 pub type AggregatorResultAsMultiResult<M> =
     MultiValue5<u32, ManagedBuffer<M>, ManagedBuffer<M>, BigUint<M>, u8>;

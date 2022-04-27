@@ -3,18 +3,11 @@ elrond_wasm::derive_imports!();
 
 const MIN_GAS_TO_SAVE_PROGRESS: u64 = 100_000_000;
 pub const NR_ROUNDS_WAIT_FOR_CALLBACK: u64 = 100; // If the callback isn't executed after 100 rounds, then we clear the state and retry
-pub const ANOTHER_ONGOING_OP_ERR_MSG: &[u8] = b"Another ongoing operation is in progress";
-pub const CALLBACK_IN_PROGRESS_ERR_MSG: &[u8] = b"Callback not executed yet";
+pub static CALLBACK_IN_PROGRESS_ERR_MSG: &[u8] = b"Callback not executed yet";
 
 #[derive(TopDecode, TopEncode, TypeAbi, PartialEq)]
-pub enum OngoingOperationType<M: ManagedTypeApi> {
+pub enum OngoingOperationType {
     None,
-    CalculateTotalLenderRewards {
-        prev_lend_nonce: u64,
-        current_lend_nonce: u64,
-        total_rewards: BigUint<M>,
-        nr_lenders_with_rewards: u64,
-    },
     ClaimStakingRewards {
         pos_id: u64,
         async_call_fire_round: u64,
@@ -22,13 +15,13 @@ pub enum OngoingOperationType<M: ManagedTypeApi> {
     },
 }
 
-pub enum LoopOp<M: ManagedTypeApi> {
+pub enum LoopOp {
     Continue,
-    Save(OngoingOperationType<M>),
+    Save(OngoingOperationType),
     Break,
 }
 
-impl<M: ManagedTypeApi> LoopOp<M> {
+impl LoopOp {
     fn is_break(&self) -> bool {
         return matches!(self, LoopOp::Break);
     }
@@ -42,7 +35,7 @@ pub trait OngoingOperationModule {
         opt_additional_gas_reserve_per_iteration: Option<u64>,
     ) -> OperationCompletionStatus
     where
-        Process: FnMut() -> LoopOp<Self::Api>,
+        Process: FnMut() -> LoopOp,
     {
         let gas_before = self.blockchain().get_gas_left();
 
@@ -80,12 +73,12 @@ pub trait OngoingOperationModule {
     }
 
     #[inline]
-    fn load_operation(&self) -> OngoingOperationType<Self::Api> {
+    fn load_operation(&self) -> OngoingOperationType {
         self.current_ongoing_operation().get()
     }
 
     #[inline]
-    fn save_progress(&self, operation: &OngoingOperationType<Self::Api>) {
+    fn save_progress(&self, operation: &OngoingOperationType) {
         self.current_ongoing_operation().set(operation);
     }
 
@@ -102,5 +95,5 @@ pub trait OngoingOperationModule {
     }
 
     #[storage_mapper("currentOngoingOperation")]
-    fn current_ongoing_operation(&self) -> SingleValueMapper<OngoingOperationType<Self::Api>>;
+    fn current_ongoing_operation(&self) -> SingleValueMapper<OngoingOperationType>;
 }
