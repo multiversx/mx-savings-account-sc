@@ -393,6 +393,12 @@ pub trait SavingsAccount:
         self.send_stablecoins(&caller, &rewards_amount);
     }
 
+    #[view(getPenaltyAmountPerLender)]
+    fn get_penalty_amount_per_lender_view(&self) -> BigUint {
+        self.update_global_lender_rewards();
+        self.penalty_amount_per_lender().get()
+    }
+
     #[view(getLenderClaimableRewards)]
     fn get_lender_claimable_rewards_view(&self, sft_nonce: u64, sft_amount: BigUint) -> BigUint {
         self.update_global_lender_rewards();

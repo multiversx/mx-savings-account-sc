@@ -408,7 +408,6 @@ pub trait StakingRewardsModule:
     #[storage_mapper("missingRewards")]
     fn missing_rewards(&self) -> SingleValueMapper<BigUint>;
 
-    #[view(getPenaltyAmountPerLender)]
     #[storage_mapper("penaltyAmountPerLender")]
     fn penalty_amount_per_lender(&self) -> SingleValueMapper<BigUint>;
 }

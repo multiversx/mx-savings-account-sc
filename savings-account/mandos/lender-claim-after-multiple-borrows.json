@@ -9,7 +9,24 @@
         },
         {
             "step": "scQuery",
+            "txId": "get-penalty-amount",
+            "tx": {
+                "to": "sc:savings_account",
+                "function": "getPenaltyAmountPerLender",
+                "arguments": []
+            },
+            "expect": {
+                "out": [
+                    "6,125"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scQuery",
             "txId": "get-lender-claimable-rewards-1",
+            "comment": "(50 - 20) * 0.5% * 100,000 - 6,125 = 15,000 - 6,125 = 8,875",
             "tx": {
                 "to": "sc:savings_account",
                 "function": "getLenderClaimableRewards",
@@ -20,7 +37,7 @@
             },
             "expect": {
                 "out": [
-                    "2,500"
+                    "8,875"
                 ]
             }
         },
