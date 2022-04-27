@@ -28,7 +28,6 @@ elrond_wasm_node::wasm_endpoints! {
         getStablecoinReserves
         getStablecoinTokenId
         getStakedTokenId
-        getUnclaimedRewards
         issueBorrowToken
         issueLendToken
         lend

@@ -292,7 +292,11 @@ pub trait StakingRewardsModule:
 
         // round up
         let nr_lenders = self.nr_lenders().get();
-        let penalty_per_lender = (&missing_rewards + (nr_lenders - 1)) / nr_lenders;
+        let penalty_per_lender = if nr_lenders > 0 {
+            (&missing_rewards + (nr_lenders - 1)) / nr_lenders
+        } else {
+            BigUint::zero()
+        };
 
         self.penalty_amount_per_lender().set(&penalty_per_lender);
         self.missing_rewards().set(&missing_rewards);
