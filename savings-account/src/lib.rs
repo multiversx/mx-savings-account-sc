@@ -108,7 +108,6 @@ pub trait SavingsAccount:
     #[payable("*")]
     #[endpoint]
     fn lend(&self) {
-        self.require_lend_token_issued();
         self.require_no_ongoing_operation();
 
         let (payment_amount, payment_token) = self.call_value().payment_token_pair();
@@ -119,21 +118,24 @@ pub trait SavingsAccount:
         );
 
         let caller = self.blockchain().get_caller();
-        let sft_nonce = self.create_and_send_lend_tokens(&caller, &payment_amount);
+        let new_lend_tokens = self
+            .lend_token()
+            .nft_create_and_send(&caller, payment_amount, &());
+        self.insert_lend_nonce(new_lend_tokens.token_nonce);
 
         self.lended_amount()
-            .update(|lended_amount| *lended_amount += &payment_amount);
+            .update(|lended_amount| *lended_amount += &new_lend_tokens.amount);
 
-        self.lend_metadata(sft_nonce).set(&LendMetadata {
-            lend_epoch: self.blockchain().get_block_epoch(),
-            amount_in_circulation: payment_amount,
-        });
+        self.lend_metadata(new_lend_tokens.token_nonce)
+            .set(&LendMetadata {
+                lend_epoch: self.blockchain().get_block_epoch(),
+                amount_in_circulation: new_lend_tokens.amount,
+            });
     }
 
     #[payable("*")]
     #[endpoint]
     fn borrow(&self) {
-        self.require_borrow_token_issued();
         self.require_no_ongoing_operation();
 
         let payment: EsdtTokenPayment<Self::Api> = self.call_value().payment();
@@ -154,7 +156,9 @@ pub trait SavingsAccount:
         require!(borrow_value > 0, "Deposit amount too low");
 
         let caller = self.blockchain().get_caller();
-        let borrow_token_nonce = self.create_and_send_borrow_tokens(&caller, &payment.amount);
+        let borrow_tokens =
+            self.borrow_token()
+                .nft_create_and_send(&caller, payment.amount.clone(), &());
         let staking_pos_id = self.add_staking_position(payment.token_nonce);
 
         let lended_amount = self.lended_amount().get();
@@ -166,7 +170,7 @@ pub trait SavingsAccount:
             );
         });
 
-        self.borrow_metadata(borrow_token_nonce)
+        self.borrow_metadata(borrow_tokens.token_nonce)
             .set(&BorrowMetadata {
                 staking_position_id: staking_pos_id,
                 borrow_epoch: self.blockchain().get_block_epoch(),
@@ -180,7 +184,6 @@ pub trait SavingsAccount:
     #[payable("*")]
     #[endpoint]
     fn repay(&self) {
-        self.require_borrow_token_issued();
         self.require_no_ongoing_operation();
 
         let payments = self.call_value().all_esdt_transfers();
@@ -190,14 +193,14 @@ pub trait SavingsAccount:
         let second_payment = payments.get(1);
 
         let stablecoin_token_id = self.stablecoin_token_id().get();
-        let borrow_token_id = self.borrow_token_id().get();
+        let borrow_token_id = self.borrow_token().get_token_id();
         require!(
             first_payment.token_identifier == stablecoin_token_id,
             "First transfer must be the Stablecoins"
         );
         require!(
             second_payment.token_identifier == borrow_token_id,
-            "Second transfer token must be the Borrow Tokens"
+            "Second transfer must be the Borrow Tokens"
         );
 
         let stablecoin_amount = &first_payment.amount;
@@ -257,7 +260,8 @@ pub trait SavingsAccount:
                 .update(|stablecoin_reserves| *stablecoin_reserves += extra_reserves);
         }
 
-        self.burn_tokens(&borrow_token_id, borrow_token_nonce, borrow_token_amount);
+        self.borrow_token()
+            .nft_burn(borrow_token_nonce, borrow_token_amount);
 
         let caller = self.blockchain().get_caller();
         let extra_stablecoins_paid = stablecoin_amount - &total_stablecoins_needed;
@@ -280,21 +284,23 @@ pub trait SavingsAccount:
             self.remove_staking_position(borrow_metadata.staking_position_id);
         }
 
-        self.send_liquid_staking_tokens(&caller, liquid_staking_nonce, borrow_token_amount);
+        self.send().direct(
+            &caller,
+            &liquid_staking_token_id,
+            liquid_staking_nonce,
+            borrow_token_amount,
+            &[],
+        );
     }
 
     #[payable("*")]
     #[endpoint]
     fn withdraw(&self) {
-        self.require_lend_token_issued();
         self.require_no_ongoing_operation();
 
         let payment: EsdtTokenPayment<Self::Api> = self.call_value().payment();
-        let lend_token_id = self.lend_token_id().get();
-        require!(
-            payment.token_identifier == lend_token_id,
-            "May only pay with lend tokens"
-        );
+        self.lend_token()
+            .require_same_token(&payment.token_identifier);
 
         let mut lend_metadata = self.lend_metadata(payment.token_nonce).get();
 
@@ -309,7 +315,8 @@ pub trait SavingsAccount:
         self.lended_amount()
             .update(|amount| *amount -= &payment.amount);
 
-        self.burn_tokens(&lend_token_id, payment.token_nonce, &payment.amount);
+        self.lend_token()
+            .nft_burn(payment.token_nonce, &payment.amount);
 
         let rewards_amount =
             self.get_lender_claimable_rewards(payment.token_nonce, &payment.amount);
@@ -326,15 +333,11 @@ pub trait SavingsAccount:
     #[payable("*")]
     #[endpoint(lenderClaimRewards)]
     fn lender_claim_rewards(&self, #[var_args] opt_reject_if_penalty: OptionalValue<bool>) {
-        self.require_lend_token_issued();
         self.require_no_ongoing_operation();
 
         let payment: EsdtTokenPayment<Self::Api> = self.call_value().payment();
-        let lend_token_id = self.lend_token_id().get();
-        require!(
-            payment.token_identifier == lend_token_id,
-            "May only pay with lend tokens"
-        );
+        self.lend_token()
+            .require_same_token(&payment.token_identifier);
 
         let mut lend_metadata = self.lend_metadata(payment.token_nonce).get();
         let last_calculate_rewards_epoch = self.last_calculate_rewards_epoch().get();
@@ -344,15 +347,21 @@ pub trait SavingsAccount:
         );
 
         // burn old sfts
-        self.burn_tokens(&lend_token_id, payment.token_nonce, &payment.amount);
+        self.lend_token()
+            .nft_burn(payment.token_nonce, &payment.amount);
 
         // create and send new sfts, with updated metadata
         let caller = self.blockchain().get_caller();
-        let new_sft_nonce = self.create_and_send_lend_tokens(&caller, &payment.amount);
-        self.lend_metadata(new_sft_nonce).set(&LendMetadata {
-            lend_epoch: last_calculate_rewards_epoch,
-            amount_in_circulation: payment.amount.clone(),
-        });
+        let new_lend_tokens =
+            self.lend_token()
+                .nft_create_and_send(&caller, payment.amount.clone(), &());
+        self.insert_lend_nonce(new_lend_tokens.token_nonce);
+
+        self.lend_metadata(new_lend_tokens.token_nonce)
+            .set(&LendMetadata {
+                lend_epoch: last_calculate_rewards_epoch,
+                amount_in_circulation: payment.amount.clone(),
+            });
 
         // send rewards
         let mut rewards_amount =
