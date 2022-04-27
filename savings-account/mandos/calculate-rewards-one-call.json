@@ -169,7 +169,6 @@
                             "3-liquid_staking_nonce": "u64:8"
                         },
 
-                        "str:unclaimedRewards": "3,500",
                         "str:stablecoinReserves": "6,500",
 
                         "+": ""

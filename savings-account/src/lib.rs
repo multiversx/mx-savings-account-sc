@@ -344,7 +344,7 @@ pub trait SavingsAccount:
         lend_token_mapper.require_same_token(&payment.token_identifier);
 
         let mut lend_metadata = self.lend_metadata(payment.token_nonce).get();
-        let last_valid_claim_epoch = self.get_last_valid_claim_epoch();
+        let last_valid_claim_epoch = self.last_rewards_update_epoch().get();
         require!(
             lend_metadata.lend_epoch < last_valid_claim_epoch,
             "No rewards to claim"
@@ -400,7 +400,7 @@ pub trait SavingsAccount:
         }
 
         let lend_metadata = self.lend_metadata(sft_nonce).get();
-        let last_valid_claim_epoch = self.get_last_valid_claim_epoch();
+        let last_valid_claim_epoch = self.last_rewards_update_epoch().get();
         let lender_rewards_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
 
         self.compute_reward_amount(

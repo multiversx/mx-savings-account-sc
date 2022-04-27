@@ -304,11 +304,6 @@ pub trait StakingRewardsModule:
         self.last_rewards_update_epoch().set(current_epoch);
     }
 
-    #[inline]
-    fn get_last_valid_claim_epoch(&self) -> u64 {
-        self.last_staking_token_convert_epoch().get()
-    }
-
     fn get_first_staking_position_id(&self) -> u64 {
         self.staking_position(0).get().next_pos_id
     }
