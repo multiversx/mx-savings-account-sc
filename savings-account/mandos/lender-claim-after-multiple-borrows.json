@@ -137,7 +137,7 @@
                     "nonce": "*",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "51,125",
+                        "str:STABLE-123456": "54,187",
                         "str:LEND-123456": {
                             "instances": [
                                 {
@@ -154,7 +154,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "75,000",
+                        "str:STABLE-123456": "71,938",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -269,7 +269,7 @@
 
                         "str:unclaimedRewards": "0",
                         "str:stablecoinReserves": "0",
-                        "str:missingRewards": "0",
+                        "str:missingRewards": "3,062",
 
                         "+": ""
                     },

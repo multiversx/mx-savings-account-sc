@@ -24,8 +24,10 @@
             },
             "expect": {
                 "out": [
-                    "1,000"
-                ]
+                    "1,125"
+                ],
+                "gas": "*",
+                "refund": "*"
             }
         },
         {
@@ -85,7 +87,7 @@
                     "nonce": "*",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "101,000",
+                        "str:STABLE-123456": "100,000",
                         "str:LEND-123456": {
                             "instances": []
                         }
@@ -96,7 +98,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "34,000",
+                        "str:STABLE-123456": "35,000",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -202,10 +204,9 @@
 
                         "str:lastStakingRewardsClaimEpoch": "25",
                         "str:lastStakingTokenConvertEpoch": "25",
-                        "str:lastCalculateRewardsEpoch": "25",
+                        "str:lastRewardsUpdateEpoch": "50",
 
-                        "str:unclaimedRewards": "2,500",
-                        "str:stablecoinReserves": "6,500",
+                        "str:stablecoinReserves": "0",
 
                         "+": ""
                     },
