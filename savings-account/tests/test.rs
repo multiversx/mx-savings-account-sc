@@ -1,4 +1,5 @@
 use elrond_wasm::elrond_codec::multi_types::OptionalValue;
+use elrond_wasm::storage::mappers::StorageTokenWrapper;
 use elrond_wasm::types::{Address, EsdtLocalRole, ManagedBuffer, OperationCompletionStatus};
 use elrond_wasm_debug::{
     managed_address, managed_biguint, managed_token_id, rust_biguint, testing_framework::*,
@@ -126,9 +127,10 @@ where
                 managed_biguint!(OPTIMAL_UTILISATION),
             );
 
-            sc.lend_token_id().set(&managed_token_id!(LEND_TOKEN_ID));
-            sc.borrow_token_id()
-                .set(&managed_token_id!(BORROW_TOKEN_ID));
+            sc.lend_token()
+                .set_token_id(&managed_token_id!(LEND_TOKEN_ID));
+            sc.borrow_token()
+                .set_token_id(&managed_token_id!(BORROW_TOKEN_ID));
         })
         .assert_ok();
 

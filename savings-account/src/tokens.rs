@@ -5,6 +5,7 @@ use crate::model::{BorrowMetadata, LendMetadata};
 
 const LEND_TOKEN_TICKER: &[u8] = b"LEND";
 const BORROW_TOKEN_TICKER: &[u8] = b"BORROW";
+static TOKEN_ALREADY_ISSUED_ERR_MSG: &[u8] = b"Token already issued";
 
 // only for readability in storage mappers
 pub type CurrentLendNonce = u64;
@@ -18,7 +19,7 @@ pub trait TokensModule {
     #[payable("EGLD")]
     #[endpoint(issueLendToken)]
     fn issue_lend_token(&self, token_name: ManagedBuffer, num_decimals: usize) {
-        require!(self.lend_token_id().is_empty(), "Lend token already issued");
+        require!(self.lend_token().is_empty(), TOKEN_ALREADY_ISSUED_ERR_MSG);
 
         let payment_amount = self.call_value().egld_value();
         self.issue_token(
@@ -34,10 +35,7 @@ pub trait TokensModule {
     #[payable("EGLD")]
     #[endpoint(issueBorrowToken)]
     fn issue_borrow_token(&self, token_name: ManagedBuffer, num_decimals: usize) {
-        require!(
-            self.borrow_token_id().is_empty(),
-            "Borrow token already issued"
-        );
+        require!(self.borrow_token().is_empty(), TOKEN_ALREADY_ISSUED_ERR_MSG);
 
         let payment_amount = self.call_value().egld_value();
         self.issue_token(
@@ -70,56 +68,9 @@ pub trait TokensModule {
             .with_callback(self.callbacks().issue_callback(token_ticker))
     }
 
-    fn create_and_send_lend_tokens(&self, to: &ManagedAddress, amount: &BigUint) -> u64 {
-        let lend_token_id = self.lend_token_id().get();
-        let lend_nonce = self.create_tokens(&lend_token_id, amount);
-        self.insert_lend_nonce(lend_nonce);
-
-        self.send()
-            .direct(to, &lend_token_id, lend_nonce, amount, &[]);
-
-        lend_nonce
-    }
-
-    fn create_and_send_borrow_tokens(&self, to: &ManagedAddress, amount: &BigUint) -> u64 {
-        let borrow_token_id = self.borrow_token_id().get();
-        let borrow_nonce = self.create_tokens(&borrow_token_id, amount);
-
-        self.send()
-            .direct(to, &borrow_token_id, borrow_nonce, amount, &[]);
-
-        borrow_nonce
-    }
-
-    fn create_tokens(&self, token_id: &TokenIdentifier, amount: &BigUint) -> u64 {
-        self.send().esdt_nft_create_compact(token_id, amount, &())
-    }
-
     fn send_stablecoins(&self, to: &ManagedAddress, amount: &BigUint) {
         let stablecoin_token_id = self.stablecoin_token_id().get();
         self.send().direct(to, &stablecoin_token_id, 0, amount, &[]);
-    }
-
-    fn send_liquid_staking_tokens(&self, to: &ManagedAddress, token_nonce: u64, amount: &BigUint) {
-        let liquid_staking_token_id = self.liquid_staking_token_id().get();
-        self.send()
-            .direct(to, &liquid_staking_token_id, token_nonce, amount, &[]);
-    }
-
-    #[inline]
-    fn burn_tokens(&self, token_id: &TokenIdentifier, nonce: u64, amount: &BigUint) {
-        self.send().esdt_local_burn(token_id, nonce, amount);
-    }
-
-    fn require_lend_token_issued(&self) {
-        require!(!self.lend_token_id().is_empty(), "Lend token not issued");
-    }
-
-    fn require_borrow_token_issued(&self) {
-        require!(
-            !self.borrow_token_id().is_empty(),
-            "Borrow token not issued"
-        );
     }
 
     fn get_first_lend_nonce(&self) -> u64 {
@@ -158,9 +109,9 @@ pub trait TokensModule {
         match result {
             ManagedAsyncCallResult::Ok(token_id) => {
                 if token_ticker == ManagedBuffer::new_from_bytes(LEND_TOKEN_TICKER) {
-                    self.lend_token_id().set(&token_id);
+                    self.lend_token().set_token_id(&token_id);
                 } else if token_ticker == ManagedBuffer::new_from_bytes(BORROW_TOKEN_TICKER) {
-                    self.borrow_token_id().set(&token_id);
+                    self.borrow_token().set_token_id(&token_id);
                 } else {
                     self.issue_callback_refund();
                 }
@@ -200,7 +151,7 @@ pub trait TokensModule {
 
     #[view(getLendTokenId)]
     #[storage_mapper("lendTokenId")]
-    fn lend_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
+    fn lend_token(&self) -> NonFungibleTokenMapper<Self::Api>;
 
     #[storage_mapper("lendMetadata")]
     fn lend_metadata(&self, sft_nonce: u64) -> SingleValueMapper<LendMetadata<Self::Api>>;
@@ -215,7 +166,7 @@ pub trait TokensModule {
 
     #[view(getBorrowTokenId)]
     #[storage_mapper("borrowTokenId")]
-    fn borrow_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
+    fn borrow_token(&self) -> NonFungibleTokenMapper<Self::Api>;
 
     #[storage_mapper("borrowMetadata")]
     fn borrow_metadata(&self, sft_nonce: u64) -> SingleValueMapper<BorrowMetadata<Self::Api>>;
