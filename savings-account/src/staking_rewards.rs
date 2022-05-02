@@ -2,8 +2,7 @@ elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
 use crate::ongoing_operation::{
-    LoopOp, OngoingOperationType, ANOTHER_ONGOING_OP_ERR_MSG, CALLBACK_IN_PROGRESS_ERR_MSG,
-    NR_ROUNDS_WAIT_FOR_CALLBACK,
+    LoopOp, OngoingOperationType, CALLBACK_IN_PROGRESS_ERR_MSG, NR_ROUNDS_WAIT_FOR_CALLBACK,
 };
 
 const RECEIVE_STAKING_REWARDS_FUNC_NAME: &[u8] = b"receiveStakingRewards";
@@ -53,9 +52,8 @@ pub trait StakingRewardsModule:
     crate::math::MathModule
     + crate::ongoing_operation::OngoingOperationModule
     + crate::tokens::TokensModule
+    + crate::common_storage::CommonStorageModule
 {
-    // endpoints
-
     #[endpoint(claimStakingRewards)]
     fn claim_staking_rewards(&self) {
         let current_epoch = self.blockchain().get_block_epoch();
@@ -87,7 +85,6 @@ pub trait StakingRewardsModule:
                 let staking_pos = self.staking_position(pos_id).get();
                 staking_pos.next_pos_id
             }
-            _ => sc_panic!(ANOTHER_ONGOING_OP_ERR_MSG),
         };
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
@@ -254,142 +251,58 @@ pub trait StakingRewardsModule:
         self.stablecoin_reserves()
             .update(|stablecoin_reserves| *stablecoin_reserves += received_payment.amount);
         self.last_staking_token_convert_epoch().set(current_epoch);
+
+        self.update_global_lender_rewards();
     }
 
-    #[endpoint(calculateTotalLenderRewards)]
-    fn calculate_total_lender_rewards(&self) -> OperationCompletionStatus {
-        let reward_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
-        let last_calculate_rewards_epoch = self.last_calculate_rewards_epoch().get();
-
-        let last_staking_token_convert_epoch = self.last_staking_token_convert_epoch().get();
+    fn update_global_lender_rewards(&self) {
         let current_epoch = self.blockchain().get_block_epoch();
+        let last_rewards_update_epoch = self.last_rewards_update_epoch().get();
+        let extra_rewards_needed = if last_rewards_update_epoch < current_epoch {
+            let total_lended_amount = self.lended_amount().get();
+            let reward_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
 
-        require!(
-            last_staking_token_convert_epoch == current_epoch,
-            "Must claim staking rewards and convert to stablecoin for this epoch first"
-        );
-        require!(
-            last_calculate_rewards_epoch < current_epoch,
-            "Already calculated rewards this epoch"
-        );
-
-        let last_lend_nonce = self.last_valid_lend_nonce().get();
-        require!(last_lend_nonce > 0, "No lenders");
-
-        let (
-            mut prev_lend_nonce,
-            mut current_lend_nonce,
-            mut total_rewards,
-            mut nr_lenders_with_rewards,
-        ) = match self.load_operation() {
-            OngoingOperationType::None => {
-                (0u64, self.get_first_lend_nonce(), BigUint::zero(), 0u64)
-            }
-            OngoingOperationType::CalculateTotalLenderRewards {
-                prev_lend_nonce,
-                current_lend_nonce,
-                total_rewards,
-                nr_lenders_with_rewards,
-            } => (
-                prev_lend_nonce,
-                current_lend_nonce,
-                total_rewards,
-                nr_lenders_with_rewards,
-            ),
-            _ => sc_panic!(ANOTHER_ONGOING_OP_ERR_MSG),
+            self.compute_reward_amount(
+                &total_lended_amount,
+                last_rewards_update_epoch,
+                current_epoch,
+                &reward_percentage_per_epoch,
+            )
+        } else {
+            BigUint::zero()
         };
-        let current_epoch = self.blockchain().get_block_epoch();
 
-        let run_result = self.run_while_it_has_gas(
-            || {
-                let next_lend_nonce = self.lend_nonces_list(current_lend_nonce).get();
-
-                if self.lend_metadata(current_lend_nonce).is_empty() {
-                    self.remove_lend_nonce(prev_lend_nonce, current_lend_nonce);
-                } else {
-                    let metadata = self.lend_metadata(current_lend_nonce).get();
-                    let reward_amount = self.compute_reward_amount(
-                        &metadata.amount_in_circulation,
-                        metadata.lend_epoch,
-                        current_epoch,
-                        &reward_percentage_per_epoch,
-                    );
-                    if reward_amount > 0u32 {
-                        nr_lenders_with_rewards += 1;
-                        total_rewards += reward_amount;
-                    }
-
-                    prev_lend_nonce = current_lend_nonce;
-                }
-
-                current_lend_nonce = next_lend_nonce;
-                if current_lend_nonce == 0 {
-                    LoopOp::Break
-                } else {
-                    LoopOp::Continue
-                }
-            },
-            None,
-        );
-
+        let mut stablecoin_reserves = self.stablecoin_reserves().get();
         let mut missing_rewards = self.missing_rewards().get();
-        total_rewards -= &missing_rewards;
+        if extra_rewards_needed > stablecoin_reserves {
+            let extra_missing_rewards = &extra_rewards_needed - &stablecoin_reserves;
+            missing_rewards += extra_missing_rewards;
+            stablecoin_reserves = BigUint::zero();
+        } else {
+            stablecoin_reserves -= extra_rewards_needed;
 
-        match run_result {
-            OperationCompletionStatus::Completed => {
-                if nr_lenders_with_rewards == 0 {
-                    return run_result;
-                }
-
-                let prev_unclaimed_rewards = self.unclaimed_rewards().get();
-                let extra_unclaimed = &total_rewards - &prev_unclaimed_rewards;
-                let stablecoin_reserves = self.stablecoin_reserves().get();
-
-                let mut leftover_reserves: BigUint;
-                if extra_unclaimed > stablecoin_reserves {
-                    let extra_missing_rewards = &extra_unclaimed - &stablecoin_reserves;
-                    total_rewards -= &extra_missing_rewards;
-                    missing_rewards += extra_missing_rewards;
-
-                    leftover_reserves = BigUint::zero();
-                } else {
-                    leftover_reserves = stablecoin_reserves - extra_unclaimed;
-                    if leftover_reserves >= missing_rewards {
-                        total_rewards += &missing_rewards;
-                        leftover_reserves -= &missing_rewards;
-                        missing_rewards = BigUint::zero();
-                    } else {
-                        total_rewards += &leftover_reserves;
-                        missing_rewards -= &leftover_reserves;
-                        leftover_reserves = BigUint::zero();
-                    }
-                }
-
-                // round up
-                let penalty_per_lender =
-                    (&missing_rewards + (nr_lenders_with_rewards - 1)) / nr_lenders_with_rewards;
-                self.penalty_amount_per_lender().set(&penalty_per_lender);
-                self.missing_rewards().set(&missing_rewards);
-
-                let current_epoch = self.blockchain().get_block_epoch();
-                self.last_calculate_rewards_epoch().set(&current_epoch);
-                self.unclaimed_rewards().set(&total_rewards);
-                self.stablecoin_reserves().set(&leftover_reserves);
+            if stablecoin_reserves >= missing_rewards {
+                stablecoin_reserves -= &missing_rewards;
+                missing_rewards = BigUint::zero();
+            } else {
+                missing_rewards -= &stablecoin_reserves;
+                stablecoin_reserves = BigUint::zero();
             }
-            OperationCompletionStatus::InterruptedBeforeOutOfGas => {
-                self.save_progress(&OngoingOperationType::CalculateTotalLenderRewards {
-                    prev_lend_nonce,
-                    current_lend_nonce,
-                    total_rewards,
-                    nr_lenders_with_rewards,
-                });
-            }
+        }
+
+        // round up
+        let nr_lenders = self.nr_lenders().get();
+        let penalty_per_lender = if nr_lenders > 0 {
+            (&missing_rewards + (nr_lenders - 1)) / nr_lenders
+        } else {
+            BigUint::zero()
         };
 
-        run_result
+        self.penalty_amount_per_lender().set(&penalty_per_lender);
+        self.missing_rewards().set(&missing_rewards);
+        self.stablecoin_reserves().set(&stablecoin_reserves);
+        self.last_rewards_update_epoch().set(current_epoch);
     }
-
-    // private
 
     fn get_first_staking_position_id(&self) -> u64 {
         self.staking_position(0).get().next_pos_id
@@ -454,15 +367,11 @@ pub trait StakingRewardsModule:
         self.staking_position(pos_id).clear();
     }
 
-    // proxies
-
     #[proxy]
     fn dex_proxy(&self, address: ManagedAddress) -> dex_proxy::Proxy<Self::Api>;
 
     #[proxy]
     fn delegation_proxy(&self, address: ManagedAddress) -> delegation_proxy::Proxy<Self::Api>;
-
-    // storage
 
     #[view(getDelegationScAddress)]
     #[storage_mapper("delegationScAddress")]
@@ -489,26 +398,16 @@ pub trait StakingRewardsModule:
     #[storage_mapper("lastStakingTokenConvertEpoch")]
     fn last_staking_token_convert_epoch(&self) -> SingleValueMapper<u64>;
 
-    #[view(getLastCalculateRewardsEpoch)]
-    #[storage_mapper("lastCalculateRewardsEpoch")]
-    fn last_calculate_rewards_epoch(&self) -> SingleValueMapper<u64>;
+    #[storage_mapper("lastRewardsUpdateEpoch")]
+    fn last_rewards_update_epoch(&self) -> SingleValueMapper<u64>;
 
     #[view(getLenderRewardsPercentagePerEpoch)]
     #[storage_mapper("lenderRewardsPercentagePerEpoch")]
     fn lender_rewards_percentage_per_epoch(&self) -> SingleValueMapper<BigUint>;
 
-    #[view(getUnclaimedRewards)]
-    #[storage_mapper("unclaimedRewards")]
-    fn unclaimed_rewards(&self) -> SingleValueMapper<BigUint>;
-
     #[storage_mapper("missingRewards")]
     fn missing_rewards(&self) -> SingleValueMapper<BigUint>;
 
-    #[view(getPenaltyAmountPerLender)]
     #[storage_mapper("penaltyAmountPerLender")]
     fn penalty_amount_per_lender(&self) -> SingleValueMapper<BigUint>;
-
-    #[view(getStablecoinReserves)]
-    #[storage_mapper("stablecoinReserves")]
-    fn stablecoin_reserves(&self) -> SingleValueMapper<BigUint>;
 }

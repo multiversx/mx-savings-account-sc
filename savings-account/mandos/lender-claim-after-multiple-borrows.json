@@ -9,7 +9,24 @@
         },
         {
             "step": "scQuery",
+            "txId": "get-penalty-amount",
+            "tx": {
+                "to": "sc:savings_account",
+                "function": "getPenaltyAmountPerLender",
+                "arguments": []
+            },
+            "expect": {
+                "out": [
+                    "6,125"
+                ],
+                "gas": "*",
+                "refund": "*"
+            }
+        },
+        {
+            "step": "scQuery",
             "txId": "get-lender-claimable-rewards-1",
+            "comment": "(50 - 20) * 0.5% * 100,000 - 6,125 = 15,000 - 6,125 = 8,875",
             "tx": {
                 "to": "sc:savings_account",
                 "function": "getLenderClaimableRewards",
@@ -20,13 +37,14 @@
             },
             "expect": {
                 "out": [
-                    "2,500"
+                    "8,875"
                 ]
             }
         },
         {
             "step": "scQuery",
             "txId": "get-lender-claimable-rewards-2",
+            "comment": "(50 - 21) * 0.5% * 50,000 - 6,125 = 7,250 - 6,125 = 1,125",
             "tx": {
                 "to": "sc:savings_account",
                 "function": "getLenderClaimableRewards",
@@ -37,7 +55,7 @@
             },
             "expect": {
                 "out": [
-                    "1,000"
+                    "1,125"
                 ]
             }
         },
@@ -102,7 +120,7 @@
                     "nonce": "*",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "2,500",
+                        "str:STABLE-123456": "8,875",
                         "str:LEND-123456": {
                             "instances": [
                                 {
@@ -119,7 +137,7 @@
                     "nonce": "*",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "51,000",
+                        "str:STABLE-123456": "54,187",
                         "str:LEND-123456": {
                             "instances": [
                                 {
@@ -136,7 +154,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "81,500",
+                        "str:STABLE-123456": "71,938",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -184,11 +202,11 @@
                         "str:lendMetadata|u64:1": "",
                         "str:lendMetadata|u64:2": "",
                         "str:lendMetadata|u64:3": {
-                            "1-lend_epoch": "u64:25",
+                            "1-lend_epoch": "u64:50",
                             "2-amount_in_circulation": "biguint:100,000"
                         },
                         "str:lendMetadata|u64:4": {
-                            "1-lend_epoch": "u64:25",
+                            "1-lend_epoch": "u64:50",
                             "2-amount_in_circulation": "biguint:50,000"
                         },
                         "str:lendedAmount": "150,000",
@@ -247,10 +265,11 @@
 
                         "str:lastStakingRewardsClaimEpoch": "25",
                         "str:lastStakingTokenConvertEpoch": "25",
-                        "str:lastCalculateRewardsEpoch": "25",
+                        "str:lastRewardsUpdateEpoch": "50",
 
                         "str:unclaimedRewards": "0",
-                        "str:stablecoinReserves": "6,500",
+                        "str:stablecoinReserves": "0",
+                        "str:missingRewards": "3,062",
 
                         "+": ""
                     },

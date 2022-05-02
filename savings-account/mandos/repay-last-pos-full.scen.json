@@ -93,7 +93,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "120,666",
+                        "str:STABLE-123456": "111,104",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -178,7 +178,7 @@
                         },
                         "str:stakingPosition|u64:4": "",
 
-                        "str:stablecoinReserves": "20,666",
+                        "str:stablecoinReserves": "14,166",
 
                         "+": ""
                     },

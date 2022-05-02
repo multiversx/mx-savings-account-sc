@@ -1,3 +1,5 @@
+/*
+
 use elrond_wasm::elrond_codec::multi_types::OptionalValue;
 use elrond_wasm::storage::mappers::StorageTokenWrapper;
 use elrond_wasm::types::{Address, EsdtLocalRole, ManagedBuffer, OperationCompletionStatus};
@@ -5,6 +7,7 @@ use elrond_wasm_debug::{
     managed_address, managed_biguint, managed_token_id, rust_biguint, testing_framework::*,
     DebugApi,
 };
+use savings_account::common_storage::CommonStorageModule;
 use savings_account::staking_rewards::StakingRewardsModule;
 use savings_account::tokens::TokensModule;
 use savings_account::*;
@@ -315,3 +318,4 @@ fn test_rewards_penalty() {
         &rust_biguint!(3_000),
     );
 }
+*/

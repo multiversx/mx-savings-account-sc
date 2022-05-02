@@ -20,8 +20,8 @@ pub trait MathModule {
             r_base + &utilisation_ratio
         } else {
             let bp = BigUint::from(BASE_PRECISION);
-            let denominator = &bp - u_optimal;
-            let numerator = &(u_current - u_optimal) * r_slope2;
+            let denominator = bp - u_optimal;
+            let numerator = (u_current - u_optimal) * r_slope2;
 
             (r_base + r_slope1) + numerator / denominator
         }
@@ -52,26 +52,35 @@ pub trait MathModule {
         let epoch_diff = current_epoch - borrow_epoch;
 
         let bp = BigUint::from(BASE_PRECISION);
-        let time_unit_percentage = (&epoch_diff.into() * &bp) / EPOCHS_IN_YEAR;
-        let debt_percetange = &(&time_unit_percentage * borrow_rate) / &bp;
+        let time_unit_percentage = (&bp * epoch_diff) / EPOCHS_IN_YEAR;
+        let debt_percetange = (&time_unit_percentage * borrow_rate) / &bp;
 
         (&debt_percetange * amount) / bp
+    }
+
+    fn compute_reward_amount_per_epoch(
+        &self,
+        amount: &BigUint,
+        reward_percentage_per_epoch: &BigUint,
+    ) -> BigUint {
+        (reward_percentage_per_epoch * amount) / BASE_PRECISION
     }
 
     fn compute_reward_amount(
         &self,
         amount: &BigUint,
         lend_epoch: u64,
-        last_calculate_rewards_epoch: u64,
+        last_valid_claim_epoch: u64,
         reward_percentage_per_epoch: &BigUint,
     ) -> BigUint {
-        if lend_epoch >= last_calculate_rewards_epoch {
+        if lend_epoch >= last_valid_claim_epoch {
             return BigUint::zero();
         }
 
-        let epoch_diff = last_calculate_rewards_epoch - lend_epoch;
-        let percentage = &epoch_diff.into() * reward_percentage_per_epoch;
+        let epoch_diff = last_valid_claim_epoch - lend_epoch;
+        let reward_amt_per_epoch =
+            self.compute_reward_amount_per_epoch(amount, reward_percentage_per_epoch);
 
-        (&percentage * amount) / BASE_PRECISION
+        reward_amt_per_epoch * epoch_diff
     }
 }

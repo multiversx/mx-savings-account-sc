@@ -97,7 +97,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "104,999",
+                        "str:STABLE-123456": "95,437",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -196,7 +196,7 @@
                             "3-liquid_staking_nonce": "u64:8"
                         },
 
-                        "str:stablecoinReserves": "14,999",
+                        "str:stablecoinReserves": "8,499",
 
                         "+": ""
                     },
@@ -285,7 +285,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "120,532",
+                        "str:STABLE-123456": "110,970",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -369,7 +369,7 @@
                             "3-liquid_staking_nonce": "u64:8"
                         },
 
-                        "str:stablecoinReserves": "20,532",
+                        "str:stablecoinReserves": "14,032",
 
                         "+": ""
                     },
