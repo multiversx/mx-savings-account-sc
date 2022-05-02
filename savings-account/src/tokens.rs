@@ -121,12 +121,15 @@ pub trait TokensModule {
     fn lend_token(&self) -> NonFungibleTokenMapper<Self::Api>;
 
     #[storage_mapper("lendMetadata")]
-    fn lend_metadata(&self, sft_nonce: u64) -> SingleValueMapper<LendMetadata<Self::Api>>;
+    fn lend_metadata(&self, lend_token_nonce: u64) -> SingleValueMapper<LendMetadata<Self::Api>>;
 
     #[view(getBorrowTokenId)]
     #[storage_mapper("borrowTokenId")]
     fn borrow_token(&self) -> NonFungibleTokenMapper<Self::Api>;
 
     #[storage_mapper("borrowMetadata")]
-    fn borrow_metadata(&self, sft_nonce: u64) -> SingleValueMapper<BorrowMetadata<Self::Api>>;
+    fn borrow_metadata(
+        &self,
+        borrow_token_nonce: u64,
+    ) -> SingleValueMapper<BorrowMetadata<Self::Api>>;
 }

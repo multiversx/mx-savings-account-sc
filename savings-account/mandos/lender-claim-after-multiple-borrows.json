@@ -8,25 +8,86 @@
             }
         },
         {
-            "step": "scQuery",
-            "txId": "get-penalty-amount",
+            "step": "scCall",
+            "comment": "100,000 out of total 150,000 => ~66% of 12,250. Called as endpoint instead of query for the check state after",
             "tx": {
+                "from": "address:lender1",
                 "to": "sc:savings_account",
-                "function": "getPenaltyAmountPerLender",
-                "arguments": []
+                "value": "0",
+                "function": "getPenaltyAmount",
+                "arguments": [
+                    "100,000"
+                ],
+                "gasLimit": "50,000,000",
+                "gasPrice": "0"
             },
             "expect": {
+                "status": "0",
+                "message": "",
                 "out": [
-                    "6,125"
+                    "8,166"
                 ],
                 "gas": "*",
                 "refund": "*"
             }
         },
         {
+            "step": "checkState",
+            "accounts": {
+                "address:lender1": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "0",
+                        "str:LEND-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "100,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        }
+                    },
+                    "storage": {}
+                },
+                "address:lender2": {
+                    "nonce": "*",
+                    "balance": "0",
+                    "esdt": {
+                        "str:STABLE-123456": "50,000",
+                        "str:LEND-123456": {
+                            "instances": [
+                                {
+                                    "nonce": "2",
+                                    "balance": "50,000",
+                                    "creator": "sc:savings_account"
+                                }
+                            ]
+                        }
+                    },
+                    "storage": {}
+                },
+                "sc:savings_account": {
+                    "nonce": "0",
+                    "balance": "0",
+                    "esdt": "*",
+                    "storage": {
+                        "str:lentAmount": "150,000",
+                        "str:stablecoinReserves": "0",
+                        "str:missingRewards": "12,250",
+                        "str:penaltyPerLendToken": "81,666,666,666,666,667",
+                        "+": ""
+                    },
+                    "code": "file:../output/savings-account.wasm"
+                },
+                "+": {}
+            }
+        },
+        {
             "step": "scQuery",
             "txId": "get-lender-claimable-rewards-1",
-            "comment": "(50 - 20) * 0.5% * 100,000 - 6,125 = 15,000 - 6,125 = 8,875",
+            "comment": "(50 - 20) * 0.5% * 100,000 - 6,125 = 15,000 - 8,166 = 6,834",
             "tx": {
                 "to": "sc:savings_account",
                 "function": "getLenderClaimableRewards",
@@ -37,14 +98,14 @@
             },
             "expect": {
                 "out": [
-                    "8,875"
+                    "6,834"
                 ]
             }
         },
         {
             "step": "scQuery",
             "txId": "get-lender-claimable-rewards-2",
-            "comment": "(50 - 21) * 0.5% * 50,000 - 6,125 = 7,250 - 6,125 = 1,125",
+            "comment": "(50 - 21) * 0.5% * 50,000 - 4,083 = 7,250 - 4,083 = 3,167",
             "tx": {
                 "to": "sc:savings_account",
                 "function": "getLenderClaimableRewards",
@@ -55,7 +116,7 @@
             },
             "expect": {
                 "out": [
-                    "1,125"
+                    "3,167"
                 ]
             }
         },
@@ -120,7 +181,7 @@
                     "nonce": "*",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "8,875",
+                        "str:STABLE-123456": "6,834",
                         "str:LEND-123456": {
                             "instances": [
                                 {
@@ -137,7 +198,7 @@
                     "nonce": "*",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "54,187",
+                        "str:STABLE-123456": "53,167",
                         "str:LEND-123456": {
                             "instances": [
                                 {
@@ -154,7 +215,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "71,938",
+                        "str:STABLE-123456": "74,999",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -209,8 +270,7 @@
                             "1-lend_epoch": "u64:50",
                             "2-amount_in_circulation": "biguint:50,000"
                         },
-                        "str:lendedAmount": "150,000",
-
+                        "str:lentAmount": "150,000",
                         "str:borrowMetadata|u64:1": {
                             "1-staking_position_id": "u64:1",
                             "2-borrow_epoch": "u64:25",
@@ -236,7 +296,6 @@
                             "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowedAmount": "75,000",
-
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",
                             "2-next_pos_id": "u64:1",
@@ -262,15 +321,12 @@
                             "2-next_pos_id": "u64:0",
                             "3-liquid_staking_nonce": "u64:8"
                         },
-
                         "str:lastStakingRewardsClaimEpoch": "25",
                         "str:lastStakingTokenConvertEpoch": "25",
                         "str:lastRewardsUpdateEpoch": "50",
-
-                        "str:unclaimedRewards": "0",
                         "str:stablecoinReserves": "0",
-                        "str:missingRewards": "3,062",
-
+                        "str:missingRewards": "1",
+                        "str:totalMissedRewardsByClaimSinceLastCalculation": "12,249",
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"

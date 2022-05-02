@@ -21,7 +21,10 @@
                 "status": "0",
                 "message": "",
                 "out": [
-                    "5", "6", "7", "8",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
                     "str:completed"
                 ],
                 "gas": "*",
@@ -115,8 +118,7 @@
                             "1-lend_epoch": "u64:21",
                             "2-amount_in_circulation": "biguint:50,000"
                         },
-                        "str:lendedAmount": "150,000",
-
+                        "str:lentAmount": "150,000",
                         "str:borrowMetadata|u64:1": {
                             "1-staking_position_id": "u64:1",
                             "2-borrow_epoch": "u64:25",
@@ -142,7 +144,6 @@
                             "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowedAmount": "75,000",
-
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",
                             "2-next_pos_id": "u64:1",
@@ -168,9 +169,7 @@
                             "2-next_pos_id": "u64:0",
                             "3-liquid_staking_nonce": "u64:8"
                         },
-
                         "str:stablecoinReserves": "6,500",
-
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"

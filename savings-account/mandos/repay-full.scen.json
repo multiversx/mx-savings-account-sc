@@ -157,7 +157,7 @@
                     "nonce": "0",
                     "balance": "0",
                     "esdt": {
-                        "str:STABLE-123456": "111,104",
+                        "str:STABLE-123456": "114,165",
                         "str:LIQ-123456": {
                             "instances": [
                                 {
@@ -197,8 +197,7 @@
                         }
                     },
                     "storage": {
-                        "str:lendedAmount": "150,000",
-
+                        "str:lentAmount": "150,000",
                         "str:borrowMetadata|u64:1": "",
                         "str:borrowMetadata|u64:2": {
                             "1-staking_position_id": "u64:2",
@@ -219,7 +218,6 @@
                             "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowedAmount": "50,000",
-
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",
                             "2-next_pos_id": "u64:2",
@@ -240,9 +238,7 @@
                             "2-next_pos_id": "u64:0",
                             "3-liquid_staking_nonce": "u64:8"
                         },
-
                         "str:stablecoinReserves": "14,166",
-
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"

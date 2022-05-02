@@ -81,10 +81,8 @@
                             "2-next_pos_id": "u64:0",
                             "3-liquid_staking_nonce": "u64:5"
                         },
-
                         "str:lastStakingRewardsClaimEpoch": "23",
                         "str:currentOngoingOperation": "",
-                        
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"
@@ -166,13 +164,10 @@
                             "2-next_pos_id": "u64:0",
                             "3-liquid_staking_nonce": "u64:5"
                         },
-
                         "str:lastStakingRewardsClaimEpoch": "23",
                         "str:lastStakingTokenConvertEpoch": "23",
                         "str:currentOngoingOperation": "",
-
                         "str:stablecoinReserves": "500",
-                        
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"
@@ -312,10 +307,8 @@
                             "1-lend_epoch": "u64:23",
                             "2-amount_in_circulation": "biguint:50,000"
                         },
-
-                        "str:lendedAmount": "150,000",
+                        "str:lentAmount": "150,000",
                         "str:stablecoinReserves": "500",
-                        
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"
@@ -501,11 +494,9 @@
                             "1-lend_epoch": "u64:23",
                             "2-amount_in_circulation": "biguint:50,000"
                         },
-                        "str:lendedAmount": "150,000",
-
+                        "str:lentAmount": "150,000",
                         "str:unclaimedRewards": "0",
                         "str:stablecoinReserves": "500",
-                        
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"

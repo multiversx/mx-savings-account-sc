@@ -19,12 +19,12 @@ elrond_wasm_node::wasm_endpoints! {
         getLastStakingRewardsClaimEpoch
         getLastStakingTokenConvertEpoch
         getLendTokenId
-        getLendedAmount
         getLenderClaimableRewards
         getLenderRewardsPercentagePerEpoch
+        getLentAmount
         getLiquidStakingTokenId
         getLoadToValuePercentage
-        getPenaltyAmountPerLender
+        getPenaltyAmount
         getStablecoinReserves
         getStablecoinTokenId
         getStakedTokenId
