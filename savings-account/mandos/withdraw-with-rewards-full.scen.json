@@ -24,7 +24,7 @@
             },
             "expect": {
                 "out": [
-                    "1,125"
+                    "3,167"
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -123,8 +123,7 @@
                             "2-amount_in_circulation": "biguint:100,000"
                         },
                         "str:lendMetadata|u64:2": "",
-                        "str:lendedAmount": "100,000",
-
+                        "str:lentAmount": "100,000",
                         "str:borrowMetadata|u64:1": {
                             "1-staking_position_id": "u64:1",
                             "2-borrow_epoch": "u64:25",
@@ -150,7 +149,6 @@
                             "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowedAmount": "75,000",
-
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",
                             "2-next_pos_id": "u64:1",
@@ -176,13 +174,10 @@
                             "2-next_pos_id": "u64:0",
                             "3-liquid_staking_nonce": "u64:8"
                         },
-
                         "str:lastStakingRewardsClaimEpoch": "25",
                         "str:lastStakingTokenConvertEpoch": "25",
                         "str:lastRewardsUpdateEpoch": "50",
-
                         "str:stablecoinReserves": "0",
-
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"

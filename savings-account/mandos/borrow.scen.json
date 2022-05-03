@@ -115,8 +115,7 @@
                         }
                     },
                     "storage": {
-                        "str:lendedAmount": "150,000",
-
+                        "str:lentAmount": "150,000",
                         "str:borrowMetadata|u64:1": {
                             "1-staking_position_id": "u64:1",
                             "2-borrow_epoch": "u64:25",
@@ -124,7 +123,6 @@
                             "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
                         },
                         "str:borrowedAmount": "18,750",
-
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",
                             "2-next_pos_id": "u64:1",
@@ -135,8 +133,6 @@
                             "2-next_pos_id": "u64:0",
                             "3-liquid_staking_nonce": "u64:1"
                         },
-                        
-
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"

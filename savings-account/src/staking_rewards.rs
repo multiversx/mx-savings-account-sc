@@ -1,8 +1,11 @@
 elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
-use crate::ongoing_operation::{
-    LoopOp, OngoingOperationType, CALLBACK_IN_PROGRESS_ERR_MSG, NR_ROUNDS_WAIT_FOR_CALLBACK,
+use crate::{
+    math::DEFAULT_DECIMALS,
+    ongoing_operation::{
+        LoopOp, OngoingOperationType, CALLBACK_IN_PROGRESS_ERR_MSG, NR_ROUNDS_WAIT_FOR_CALLBACK,
+    },
 };
 
 const RECEIVE_STAKING_REWARDS_FUNC_NAME: &[u8] = b"receiveStakingRewards";
@@ -258,12 +261,14 @@ pub trait StakingRewardsModule:
     fn update_global_lender_rewards(&self) {
         let current_epoch = self.blockchain().get_block_epoch();
         let last_rewards_update_epoch = self.last_rewards_update_epoch().get();
+        let total_lent_amount = self.lent_amount().get();
         let extra_rewards_needed = if last_rewards_update_epoch < current_epoch {
-            let total_lended_amount = self.lended_amount().get();
-            let reward_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
+            self.total_missed_rewards_by_claim_since_last_calculation()
+                .clear();
 
+            let reward_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
             self.compute_reward_amount(
-                &total_lended_amount,
+                &total_lent_amount,
                 last_rewards_update_epoch,
                 current_epoch,
                 &reward_percentage_per_epoch,
@@ -290,15 +295,20 @@ pub trait StakingRewardsModule:
             }
         }
 
-        // round up
-        let nr_lenders = self.nr_lenders().get();
-        let penalty_per_lender = if nr_lenders > 0 {
-            (&missing_rewards + (nr_lenders - 1)) / nr_lenders
-        } else {
+        // rounded up
+        let penalty_per_lend_token = if missing_rewards == 0 || total_lent_amount == 0 {
             BigUint::zero()
+        } else {
+            let missed_by_claim = self
+                .total_missed_rewards_by_claim_since_last_calculation()
+                .get();
+            let total_missing_rewards = &missing_rewards + &missed_by_claim;
+
+            (total_missing_rewards * DEFAULT_DECIMALS + &total_lent_amount - 1u32)
+                / total_lent_amount
         };
 
-        self.penalty_amount_per_lender().set(&penalty_per_lender);
+        self.penalty_per_lend_token().set(&penalty_per_lend_token);
         self.missing_rewards().set(&missing_rewards);
         self.stablecoin_reserves().set(&stablecoin_reserves);
         self.last_rewards_update_epoch().set(current_epoch);
@@ -408,6 +418,9 @@ pub trait StakingRewardsModule:
     #[storage_mapper("missingRewards")]
     fn missing_rewards(&self) -> SingleValueMapper<BigUint>;
 
-    #[storage_mapper("penaltyAmountPerLender")]
-    fn penalty_amount_per_lender(&self) -> SingleValueMapper<BigUint>;
+    #[storage_mapper("penaltyPerLendToken")]
+    fn penalty_per_lend_token(&self) -> SingleValueMapper<BigUint>;
+
+    #[storage_mapper("totalMissedRewardsByClaimSinceLastCalculation")]
+    fn total_missed_rewards_by_claim_since_last_calculation(&self) -> SingleValueMapper<BigUint>;
 }

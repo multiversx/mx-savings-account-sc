@@ -10,6 +10,7 @@ mod price_aggregator_proxy;
 pub mod staking_rewards;
 pub mod tokens;
 
+use math::DEFAULT_DECIMALS;
 use model::*;
 use price_aggregator_proxy::*;
 
@@ -125,9 +126,8 @@ pub trait SavingsAccount:
             .lend_token()
             .nft_create_and_send(&caller, payment_amount, &());
 
-        self.lended_amount()
-            .update(|lended_amount| *lended_amount += &new_lend_tokens.amount);
-        self.nr_lenders().update(|nr_lenders| *nr_lenders += 1);
+        self.lent_amount()
+            .update(|lent_amount| *lent_amount += &new_lend_tokens.amount);
 
         self.lend_metadata(new_lend_tokens.token_nonce)
             .set(&LendMetadata {
@@ -164,11 +164,11 @@ pub trait SavingsAccount:
                 .nft_create_and_send(&caller, payment.amount.clone(), &());
         let staking_pos_id = self.add_staking_position(payment.token_nonce);
 
-        let lended_amount = self.lended_amount().get();
+        let lent_amount = self.lent_amount().get();
         self.borrowed_amount().update(|total_borrowed| {
             *total_borrowed += &borrow_value;
             require!(
-                *total_borrowed <= lended_amount,
+                *total_borrowed <= lent_amount,
                 "Not have enough funds to lend"
             );
         });
@@ -218,9 +218,8 @@ pub trait SavingsAccount:
         );
 
         let borrowed_amount = self.borrowed_amount().get();
-        let lended_amount = self.lended_amount().get();
-        let current_utilisation =
-            self.compute_capital_utilisation(&borrowed_amount, &lended_amount);
+        let lent_amount = self.lent_amount().get();
+        let current_utilisation = self.compute_capital_utilisation(&borrowed_amount, &lent_amount);
 
         let pool_params = self.pool_params().get();
         let borrow_rate = self.compute_borrow_rate(
@@ -309,9 +308,9 @@ pub trait SavingsAccount:
 
         let mut lend_metadata = self.lend_metadata(payment.token_nonce).get();
 
-        let lended_amount = self.lended_amount().get();
+        let lent_amount = self.lent_amount().get();
         let borrowed_amount = self.borrowed_amount().get();
-        let leftover_lend_amount = lended_amount - borrowed_amount;
+        let leftover_lend_amount = lent_amount - borrowed_amount;
         require!(
             payment.amount <= leftover_lend_amount,
             "Cannot withdraw, not enough funds"
@@ -319,7 +318,7 @@ pub trait SavingsAccount:
 
         lend_token_mapper.nft_burn(payment.token_nonce, &payment.amount);
 
-        self.lended_amount()
+        self.lent_amount()
             .update(|amount| *amount -= &payment.amount);
         self.update_lend_metadata(&mut lend_metadata, payment.token_nonce, &payment.amount);
 
@@ -372,7 +371,6 @@ pub trait SavingsAccount:
         );
         require!(rewards_amount > 0, NO_REWARDS_ERR_MSG);
 
-        self.nr_lenders().update(|nr_lenders| *nr_lenders += 1);
         self.update_lend_metadata(&mut lend_metadata, payment.token_nonce, &payment.amount);
 
         self.send_stablecoins(&caller, &rewards_amount);
@@ -386,7 +384,7 @@ pub trait SavingsAccount:
     ) -> BigUint {
         let mut rewards_amount =
             self.get_lender_claimable_rewards(lend_token_nonce, lend_token_amount);
-        let penalty_amount = self.penalty_amount_per_lender().get();
+        let penalty_amount = self.get_penalty_amount(&lend_token_amount);
         if penalty_amount > 0u32 {
             let reject = match opt_reject_if_penalty {
                 OptionalValue::Some(r) => r,
@@ -405,26 +403,43 @@ pub trait SavingsAccount:
                 if *missing_rewards < penalty_amount {
                     *missing_rewards = BigUint::zero();
                 } else {
-                    *missing_rewards -= penalty_amount;
+                    *missing_rewards -= &penalty_amount;
                 }
-            })
+            });
+            self.total_missed_rewards_by_claim_since_last_calculation()
+                .update(|total| *total += penalty_amount);
         }
 
         rewards_amount
     }
 
-    #[view(getPenaltyAmountPerLender)]
-    fn get_penalty_amount_per_lender_view(&self) -> BigUint {
+    #[view(getPenaltyAmount)]
+    fn get_penalty_amount_view(&self, lend_amount: BigUint) -> BigUint {
         self.update_global_lender_rewards();
-        self.penalty_amount_per_lender().get()
+        self.get_penalty_amount(&lend_amount)
+    }
+
+    fn get_penalty_amount(&self, lend_amount: &BigUint) -> BigUint {
+        let penalty_per_lend_token = self.penalty_per_lend_token().get();
+        if penalty_per_lend_token == 0 {
+            return penalty_per_lend_token;
+        }
+
+        // This assumes LEND token has 18 decimals
+        // TODO: Save num_decimals on storage at issue time and use that value
+        lend_amount * &penalty_per_lend_token / DEFAULT_DECIMALS
     }
 
     #[view(getLenderClaimableRewards)]
-    fn get_lender_claimable_rewards_view(&self, sft_nonce: u64, sft_amount: BigUint) -> BigUint {
+    fn get_lender_claimable_rewards_view(
+        &self,
+        lend_token_nonce: u64,
+        lend_token_amount: BigUint,
+    ) -> BigUint {
         self.update_global_lender_rewards();
 
-        let rewards = self.get_lender_claimable_rewards(sft_nonce, &sft_amount);
-        let penalty = self.penalty_amount_per_lender().get();
+        let rewards = self.get_lender_claimable_rewards(lend_token_nonce, &lend_token_amount);
+        let penalty = self.get_penalty_amount(&lend_token_amount);
 
         if rewards > penalty {
             rewards - penalty
@@ -433,17 +448,21 @@ pub trait SavingsAccount:
         }
     }
 
-    fn get_lender_claimable_rewards(&self, sft_nonce: u64, sft_amount: &BigUint) -> BigUint {
-        if self.lend_metadata(sft_nonce).is_empty() {
+    fn get_lender_claimable_rewards(
+        &self,
+        lend_token_nonce: u64,
+        lend_token_amount: &BigUint,
+    ) -> BigUint {
+        if self.lend_metadata(lend_token_nonce).is_empty() {
             return BigUint::zero();
         }
 
-        let lend_metadata = self.lend_metadata(sft_nonce).get();
+        let lend_metadata = self.lend_metadata(lend_token_nonce).get();
         let last_valid_claim_epoch = self.last_rewards_update_epoch().get();
         let lender_rewards_percentage_per_epoch = self.lender_rewards_percentage_per_epoch().get();
 
         self.compute_reward_amount(
-            sft_amount,
+            lend_token_amount,
             lend_metadata.lend_epoch,
             last_valid_claim_epoch,
             &lender_rewards_percentage_per_epoch,
@@ -457,11 +476,11 @@ pub trait SavingsAccount:
         opt_price.unwrap_or_else(|| sc_panic!("Failed to get staked token price"))
     }
 
-    fn get_staking_amount_for_position(&self, sft_nonce: u64) -> BigUint {
+    fn get_staking_amount_for_position(&self, liquid_staking_token_nonce: u64) -> BigUint {
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
 
         self.blockchain()
-            .get_sc_balance(&liquid_staking_token_id, sft_nonce)
+            .get_sc_balance(&liquid_staking_token_id, liquid_staking_token_nonce)
     }
 
     fn update_lend_metadata(
@@ -474,7 +493,6 @@ pub trait SavingsAccount:
 
         if lend_metadata.amount_in_circulation == 0 {
             self.lend_metadata(lend_nonce).clear();
-            self.nr_lenders().update(|nr_lenders| *nr_lenders -= 1);
         } else {
             self.lend_metadata(lend_nonce).set(lend_metadata);
         }

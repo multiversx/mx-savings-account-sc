@@ -84,8 +84,7 @@
                             "1-lend_epoch": "u64:20",
                             "2-amount_in_circulation": "biguint:100,000"
                         },
-                        "str:lendedAmount": "100,000",
-                        "str:nrLenders": "1",
+                        "str:lentAmount": "100,000",
                         "+": ""
                     },
                     "owner": "address:owner",
@@ -223,8 +222,7 @@
                             "1-lend_epoch": "u64:21",
                             "2-amount_in_circulation": "biguint:50,000"
                         },
-                        "str:lendedAmount": "150,000",
-                        "str:nrLenders": "2",
+                        "str:lentAmount": "150,000",
                         "+": ""
                     },
                     "code": "file:../output/savings-account.wasm"
