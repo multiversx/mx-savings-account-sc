@@ -38,7 +38,7 @@ mod delegation_proxy {
         fn claim_rewards(
             &self,
             #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>,
-            #[var_args] opt_receive_funds_func: OptionalValue<ManagedBuffer>,
+            opt_receive_funds_func: OptionalValue<ManagedBuffer>,
         );
     }
 }
@@ -134,7 +134,9 @@ pub trait StakingRewardsModule:
             self.delegation_proxy(self.delegation_sc_address().get())
                 .claim_rewards(
                     transfers,
-                    OptionalValue::Some(RECEIVE_STAKING_REWARDS_FUNC_NAME.into()),
+                    OptionalValue::Some(ManagedBuffer::new_from_bytes(
+                        RECEIVE_STAKING_REWARDS_FUNC_NAME,
+                    )),
                 )
                 .async_call()
                 .with_callback(
@@ -242,7 +244,7 @@ pub trait StakingRewardsModule:
                 staking_token_id,
                 staking_token_balance,
                 stablecoin_token_id.clone(),
-                1u32.into(),
+                1u32,
             )
             .execute_on_dest_context();
 

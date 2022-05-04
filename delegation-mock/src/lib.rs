@@ -1,5 +1,7 @@
 #![no_std]
 
+use elrond_wasm::elrond_codec::Empty;
+
 elrond_wasm::imports!();
 
 #[elrond_wasm::contract]
@@ -37,7 +39,7 @@ pub trait DelegationMock {
     fn claim_rewards(
         &self,
         #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>,
-        #[var_args] opt_receive_funds_func: OptionalValue<ManagedBuffer>,
+        opt_receive_funds_func: OptionalValue<ManagedBuffer>,
     ) {
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
 
@@ -99,7 +101,7 @@ pub trait DelegationMock {
             &ManagedBuffer::new(),
             &BigUint::zero(),
             &ManagedBuffer::new(),
-            &(),
+            &Empty,
             &ManagedVec::new(),
         )
     }

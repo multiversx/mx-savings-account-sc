@@ -1,11 +1,12 @@
+use crate::model::LendMetadata;
+
 elrond_wasm::imports!();
 elrond_wasm::derive_imports!();
 
-use crate::model::{BorrowMetadata, LendMetadata};
-
-const LEND_TOKEN_TICKER: &[u8] = b"LEND";
-const BORROW_TOKEN_TICKER: &[u8] = b"BORROW";
+static LEND_TOKEN_TICKER: &[u8] = b"LEND";
+static BORROW_TOKEN_TICKER: &[u8] = b"BORROW";
 static TOKEN_ALREADY_ISSUED_ERR_MSG: &[u8] = b"Token already issued";
+const INITIAL_SFT_AMOUNT: u32 = 1;
 
 #[elrond_wasm::module]
 pub trait TokensModule {
@@ -60,9 +61,31 @@ pub trait TokensModule {
             .with_callback(self.callbacks().issue_callback(token_ticker))
     }
 
-    fn send_stablecoins(&self, to: &ManagedAddress, amount: &BigUint) {
+    fn send_stablecoins(
+        &self,
+        to: &ManagedAddress,
+        amount: BigUint,
+    ) -> EsdtTokenPayment<Self::Api> {
         let stablecoin_token_id = self.stablecoin_token_id().get();
-        self.send().direct(to, &stablecoin_token_id, 0, amount, &[]);
+        self.send()
+            .direct(to, &stablecoin_token_id, 0, &amount, &[]);
+
+        EsdtTokenPayment::new(stablecoin_token_id, 0, amount)
+    }
+
+    fn get_or_create_lend_token_nonce(&self, lend_epoch: u64) -> u64 {
+        let mapper = self.lend_epoch_to_token_nonce(lend_epoch);
+        let existing_nonce = mapper.get();
+        if existing_nonce != 0 {
+            return existing_nonce;
+        }
+
+        let new_lend_token = self
+            .lend_token()
+            .nft_create(INITIAL_SFT_AMOUNT.into(), &LendMetadata { lend_epoch });
+        mapper.set(new_lend_token.token_nonce);
+
+        new_lend_token.token_nonce
     }
 
     // callbacks
@@ -120,16 +143,10 @@ pub trait TokensModule {
     #[storage_mapper("lendTokenId")]
     fn lend_token(&self) -> NonFungibleTokenMapper<Self::Api>;
 
-    #[storage_mapper("lendMetadata")]
-    fn lend_metadata(&self, lend_token_nonce: u64) -> SingleValueMapper<LendMetadata<Self::Api>>;
+    #[storage_mapper("lendEpochToTokenNonce")]
+    fn lend_epoch_to_token_nonce(&self, lend_epoch: u64) -> SingleValueMapper<u64>;
 
     #[view(getBorrowTokenId)]
     #[storage_mapper("borrowTokenId")]
     fn borrow_token(&self) -> NonFungibleTokenMapper<Self::Api>;
-
-    #[storage_mapper("borrowMetadata")]
-    fn borrow_metadata(
-        &self,
-        borrow_token_nonce: u64,
-    ) -> SingleValueMapper<BorrowMetadata<Self::Api>>;
 }

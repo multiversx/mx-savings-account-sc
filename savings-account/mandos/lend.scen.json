@@ -31,7 +31,12 @@
                 "status": "0",
                 "message": "",
                 "out": [
-                    "1"
+                    {
+                        "1-token_type": "u8:2",
+                        "2-token_id": "nested:str:LEND-123456",
+                        "3-token_nonce": "u64:1",
+                        "4-amount": "biguint:100,000"
+                    }
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -49,7 +54,10 @@
                                 {
                                     "nonce": "1",
                                     "balance": "100,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:20"
+                                    }
                                 }
                             ]
                         }
@@ -68,6 +76,16 @@
                                 "ESDTRoleNFTAddQuantity",
                                 "ESDTRoleNFTBurn"
                             ],
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:20"
+                                    }
+                                }
+                            ],
                             "lastNonce": "1"
                         },
                         "str:BORROW-123456": {
@@ -80,10 +98,6 @@
                         }
                     },
                     "storage": {
-                        "str:lendMetadata|u64:1": {
-                            "1-lend_epoch": "u64:20",
-                            "2-amount_in_circulation": "biguint:100,000"
-                        },
                         "str:lentAmount": "100,000",
                         "+": ""
                     },
@@ -164,7 +178,12 @@
                 "status": "0",
                 "message": "",
                 "out": [
-                    "2"
+                    {
+                        "1-token_type": "u8:2",
+                        "2-token_id": "nested:str:LEND-123456",
+                        "3-token_nonce": "u64:2",
+                        "4-amount": "biguint:50,000"
+                    }
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -183,7 +202,10 @@
                                 {
                                     "nonce": "2",
                                     "balance": "50,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:21"
+                                    }
                                 }
                             ]
                         }
@@ -202,6 +224,24 @@
                                 "ESDTRoleNFTAddQuantity",
                                 "ESDTRoleNFTBurn"
                             ],
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:20"
+                                    }
+                                },
+                                {
+                                    "nonce": "2",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:21"
+                                    }
+                                }
+                            ],
                             "lastNonce": "2"
                         },
                         "str:BORROW-123456": {
@@ -214,14 +254,6 @@
                         }
                     },
                     "storage": {
-                        "str:lendMetadata|u64:1": {
-                            "1-lend_epoch": "u64:20",
-                            "2-amount_in_circulation": "biguint:100,000"
-                        },
-                        "str:lendMetadata|u64:2": {
-                            "1-lend_epoch": "u64:21",
-                            "2-amount_in_circulation": "biguint:50,000"
-                        },
                         "str:lentAmount": "150,000",
                         "+": ""
                     },
