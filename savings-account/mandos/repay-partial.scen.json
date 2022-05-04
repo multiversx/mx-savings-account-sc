@@ -40,11 +40,12 @@
                 "status": "0",
                 "message": "",
                 "out": [
-                    "1",
-                    "str:EGLD",
-                    "str:USD",
-                    "100",
-                    "0"
+                    {
+                        "1-token_type": "u8:2",
+                        "2-token_id": "nested:str:LIQ-123456",
+                        "3-token_nonce": "u64:5",
+                        "4-amount": "biguint:150,000,000,000,000,000,000"
+                    }
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -63,22 +64,42 @@
                                 {
                                     "nonce": "1",
                                     "balance": "100,000,000,000,000,000,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-staking_position_id": "u64:1",
+                                        "2-borrow_epoch": "u64:25",
+                                        "3-staked_token_value_in_dollars_at_borrow": "biguint:100"
+                                    }
                                 },
                                 {
                                     "nonce": "2",
                                     "balance": "250,000,000,000,000,000,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-staking_position_id": "u64:2",
+                                        "2-borrow_epoch": "u64:25",
+                                        "3-staked_token_value_in_dollars_at_borrow": "biguint:100"
+                                    }
                                 },
                                 {
                                     "nonce": "3",
                                     "balance": "250,000,000,000,000,000,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-staking_position_id": "u64:3",
+                                        "2-borrow_epoch": "u64:25",
+                                        "3-staked_token_value_in_dollars_at_borrow": "biguint:100"
+                                    }
                                 },
                                 {
                                     "nonce": "4",
                                     "balance": "250,000,000,000,000,000,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-staking_position_id": "u64:4",
+                                        "2-borrow_epoch": "u64:25",
+                                        "3-staked_token_value_in_dollars_at_borrow": "biguint:100"
+                                    }
                                 }
                             ]
                         },
@@ -129,7 +150,33 @@
                                 "ESDTRoleNFTAddQuantity",
                                 "ESDTRoleNFTBurn"
                             ],
-                            "lastNonce": "4"
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:20"
+                                    }
+                                },
+                                {
+                                    "nonce": "2",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:21"
+                                    }
+                                },
+                                {
+                                    "nonce": "3",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:50"
+                                    }
+                                }
+                            ],
+                            "lastNonce": "3"
                         },
                         "str:BORROW-123456": {
                             "balance": "0",
@@ -143,30 +190,6 @@
                     },
                     "storage": {
                         "str:lentAmount": "150,000",
-                        "str:borrowMetadata|u64:1": {
-                            "1-staking_position_id": "u64:1",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:100,000,000,000,000,000,000"
-                        },
-                        "str:borrowMetadata|u64:2": {
-                            "1-staking_position_id": "u64:2",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
-                        "str:borrowMetadata|u64:3": {
-                            "1-staking_position_id": "u64:3",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
-                        "str:borrowMetadata|u64:4": {
-                            "1-staking_position_id": "u64:4",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
                         "str:borrowedAmount": "60,000",
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",
@@ -229,11 +252,12 @@
                 "status": "0",
                 "message": "",
                 "out": [
-                    "1",
-                    "str:EGLD",
-                    "str:USD",
-                    "100",
-                    "0"
+                    {
+                        "1-token_type": "u8:2",
+                        "2-token_id": "nested:str:LIQ-123456",
+                        "3-token_nonce": "u64:5",
+                        "4-amount": "biguint:100,000,000,000,000,000,000"
+                    }
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -252,17 +276,32 @@
                                 {
                                     "nonce": "2",
                                     "balance": "250,000,000,000,000,000,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-staking_position_id": "u64:2",
+                                        "2-borrow_epoch": "u64:25",
+                                        "3-staked_token_value_in_dollars_at_borrow": "biguint:100"
+                                    }
                                 },
                                 {
                                     "nonce": "3",
                                     "balance": "250,000,000,000,000,000,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-staking_position_id": "u64:3",
+                                        "2-borrow_epoch": "u64:25",
+                                        "3-staked_token_value_in_dollars_at_borrow": "biguint:100"
+                                    }
                                 },
                                 {
                                     "nonce": "4",
                                     "balance": "250,000,000,000,000,000,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-staking_position_id": "u64:4",
+                                        "2-borrow_epoch": "u64:25",
+                                        "3-staked_token_value_in_dollars_at_borrow": "biguint:100"
+                                    }
                                 }
                             ]
                         },
@@ -308,7 +347,33 @@
                                 "ESDTRoleNFTAddQuantity",
                                 "ESDTRoleNFTBurn"
                             ],
-                            "lastNonce": "4"
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:20"
+                                    }
+                                },
+                                {
+                                    "nonce": "2",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:21"
+                                    }
+                                },
+                                {
+                                    "nonce": "3",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:50"
+                                    }
+                                }
+                            ],
+                            "lastNonce": "3"
                         },
                         "str:BORROW-123456": {
                             "balance": "0",
@@ -322,25 +387,6 @@
                     },
                     "storage": {
                         "str:lentAmount": "150,000",
-                        "str:borrowMetadata|u64:1": "",
-                        "str:borrowMetadata|u64:2": {
-                            "1-staking_position_id": "u64:2",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
-                        "str:borrowMetadata|u64:3": {
-                            "1-staking_position_id": "u64:3",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
-                        "str:borrowMetadata|u64:4": {
-                            "1-staking_position_id": "u64:4",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
                         "str:borrowedAmount": "50,000",
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",

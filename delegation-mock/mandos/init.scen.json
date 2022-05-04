@@ -95,9 +95,7 @@
             "expect": {
                 "status": "0",
                 "message": "",
-                "out": [
-                    "1"
-                ],
+                "out": [],
                 "gas": "*",
                 "refund": "*"
             }
@@ -117,9 +115,7 @@
             "expect": {
                 "status": "0",
                 "message": "",
-                "out": [
-                    "2"
-                ],
+                "out": [],
                 "gas": "*",
                 "refund": "*"
             }
@@ -139,9 +135,7 @@
             "expect": {
                 "status": "0",
                 "message": "",
-                "out": [
-                    "3"
-                ],
+                "out": [],
                 "gas": "*",
                 "refund": "*"
             }
@@ -161,9 +155,7 @@
             "expect": {
                 "status": "0",
                 "message": "",
-                "out": [
-                    "4"
-                ],
+                "out": [],
                 "gas": "*",
                 "refund": "*"
             }

@@ -44,7 +44,10 @@
                                 {
                                     "nonce": "1",
                                     "balance": "100,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:20"
+                                    }
                                 }
                             ]
                         }
@@ -61,7 +64,10 @@
                                 {
                                     "nonce": "2",
                                     "balance": "50,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:21"
+                                    }
                                 }
                             ]
                         }
@@ -92,7 +98,7 @@
                 "to": "sc:savings_account",
                 "function": "getLenderClaimableRewards",
                 "arguments": [
-                    "1",
+                    "20",
                     "100,000"
                 ]
             },
@@ -110,7 +116,7 @@
                 "to": "sc:savings_account",
                 "function": "getLenderClaimableRewards",
                 "arguments": [
-                    "2",
+                    "21",
                     "50,000"
                 ]
             },
@@ -141,7 +147,18 @@
                 "status": "0",
                 "message": "",
                 "out": [
-                    "3"
+                    {
+                        "1-token_type": "u8:2",
+                        "2-token_id": "nested:str:LEND-123456",
+                        "3-token_nonce": "u64:3",
+                        "4-amount": "biguint:100,000"
+                    },
+                    {
+                        "1-token_type": "u8:0",
+                        "2-token_id": "nested:str:STABLE-123456",
+                        "3-token_nonce": "u64:0",
+                        "4-amount": "biguint:6,834"
+                    }
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -168,7 +185,18 @@
                 "status": "0",
                 "message": "",
                 "out": [
-                    "4"
+                    {
+                        "1-token_type": "u8:2",
+                        "2-token_id": "nested:str:LEND-123456",
+                        "3-token_nonce": "u64:3",
+                        "4-amount": "biguint:50,000"
+                    },
+                    {
+                        "1-token_type": "u8:0",
+                        "2-token_id": "nested:str:STABLE-123456",
+                        "3-token_nonce": "u64:0",
+                        "4-amount": "biguint:3,167"
+                    }
                 ],
                 "gas": "*",
                 "refund": "*"
@@ -187,7 +215,10 @@
                                 {
                                     "nonce": "3",
                                     "balance": "100,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:50"
+                                    }
                                 }
                             ]
                         }
@@ -202,9 +233,12 @@
                         "str:LEND-123456": {
                             "instances": [
                                 {
-                                    "nonce": "4",
+                                    "nonce": "3",
                                     "balance": "50,000",
-                                    "creator": "sc:savings_account"
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:50"
+                                    }
                                 }
                             ]
                         }
@@ -247,7 +281,33 @@
                                 "ESDTRoleNFTAddQuantity",
                                 "ESDTRoleNFTBurn"
                             ],
-                            "lastNonce": "4"
+                            "instances": [
+                                {
+                                    "nonce": "1",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:20"
+                                    }
+                                },
+                                {
+                                    "nonce": "2",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:21"
+                                    }
+                                },
+                                {
+                                    "nonce": "3",
+                                    "balance": "1",
+                                    "creator": "sc:savings_account",
+                                    "attributes": {
+                                        "1-lend_epoch": "u64:50"
+                                    }
+                                }
+                            ],
+                            "lastNonce": "3"
                         },
                         "str:BORROW-123456": {
                             "balance": "0",
@@ -260,41 +320,7 @@
                         }
                     },
                     "storage": {
-                        "str:lendMetadata|u64:1": "",
-                        "str:lendMetadata|u64:2": "",
-                        "str:lendMetadata|u64:3": {
-                            "1-lend_epoch": "u64:50",
-                            "2-amount_in_circulation": "biguint:100,000"
-                        },
-                        "str:lendMetadata|u64:4": {
-                            "1-lend_epoch": "u64:50",
-                            "2-amount_in_circulation": "biguint:50,000"
-                        },
                         "str:lentAmount": "150,000",
-                        "str:borrowMetadata|u64:1": {
-                            "1-staking_position_id": "u64:1",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
-                        "str:borrowMetadata|u64:2": {
-                            "1-staking_position_id": "u64:2",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
-                        "str:borrowMetadata|u64:3": {
-                            "1-staking_position_id": "u64:3",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
-                        "str:borrowMetadata|u64:4": {
-                            "1-staking_position_id": "u64:4",
-                            "2-borrow_epoch": "u64:25",
-                            "3-staked_token_value_in_dollars_at_borrow": "biguint:100",
-                            "4-amount_in_circulation": "biguint:250,000,000,000,000,000,000"
-                        },
                         "str:borrowedAmount": "75,000",
                         "str:stakingPosition|u64:0": {
                             "1-prev_pos_id": "u64:0",

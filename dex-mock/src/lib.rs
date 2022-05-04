@@ -22,7 +22,7 @@ pub trait DexMock {
         #[payment_amount] amount_in: BigUint,
         token_out: TokenIdentifier,
         _amount_out_min: BigUint,
-        #[var_args] opt_accept_funds_func: OptionalValue<ManagedBuffer>,
+        opt_accept_funds_func: OptionalValue<ManagedBuffer>,
     ) -> EsdtTokenPayment<Self::Api> {
         let caller = self.blockchain().get_caller();
         let amount_out = amount_in * 100u64 / EGLD_DECIMALS;

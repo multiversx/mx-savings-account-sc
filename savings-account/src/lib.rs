@@ -296,7 +296,7 @@ pub trait SavingsAccount:
     #[endpoint]
     fn withdraw(
         &self,
-        #[var_args] opt_reject_if_penalty: OptionalValue<bool>,
+        opt_reject_if_penalty: OptionalValue<bool>,
     ) -> WithdrawResultType<Self::Api> {
         self.require_no_ongoing_operation();
 
@@ -336,7 +336,7 @@ pub trait SavingsAccount:
     #[endpoint(lenderClaimRewards)]
     fn lender_claim_rewards(
         &self,
-        #[var_args] opt_reject_if_penalty: OptionalValue<bool>,
+        opt_reject_if_penalty: OptionalValue<bool>,
     ) -> ClaimRewardsResultType<Self::Api> {
         self.require_no_ongoing_operation();
 
