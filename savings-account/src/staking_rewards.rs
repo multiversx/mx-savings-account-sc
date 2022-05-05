@@ -6,6 +6,7 @@ use crate::{
     ongoing_operation::{
         LoopOp, OngoingOperationType, CALLBACK_IN_PROGRESS_ERR_MSG, NR_ROUNDS_WAIT_FOR_CALLBACK,
     },
+    staking_positions_mapper::StakingPositionsMapper,
 };
 
 const RECEIVE_STAKING_REWARDS_FUNC_NAME: &[u8] = b"receiveStakingRewards";
@@ -66,10 +67,11 @@ pub trait StakingRewardsModule:
             "Already claimed this epoch"
         );
 
+        let staking_positions_mapper = self.staking_positions();
         let current_round = self.blockchain().get_block_round();
         let mut pos_id = match self.load_operation() {
             OngoingOperationType::None => {
-                let first_pos_id = self.get_first_staking_position_id();
+                let first_pos_id = staking_positions_mapper.get_first_staking_position_id();
                 require!(first_pos_id != 0, "No staking positions available");
 
                 first_pos_id
@@ -85,7 +87,7 @@ pub trait StakingRewardsModule:
                     CALLBACK_IN_PROGRESS_ERR_MSG
                 );
 
-                let staking_pos = self.staking_position(pos_id).get();
+                let staking_pos = staking_positions_mapper.get_staking_position(pos_id);
                 staking_pos.next_pos_id
             }
         };
@@ -96,7 +98,7 @@ pub trait StakingRewardsModule:
 
         let _ = self.run_while_it_has_gas(
             || {
-                let current_staking_pos = self.staking_position(pos_id).get();
+                let current_staking_pos = staking_positions_mapper.get_staking_position(pos_id);
                 let sft_nonce = current_staking_pos.liquid_staking_nonce;
 
                 transfers.push(EsdtTokenPayment {
@@ -181,14 +183,17 @@ pub trait StakingRewardsModule:
                     "Invalid old and new liquid staking position lengths"
                 );
 
+                let mut staking_positions_mapper = self.staking_positions();
+
                 // update liquid staking token nonces
                 // needed to know which liquid staking SFT to return on repay
                 for (pos_id, new_token) in pos_ids.iter().zip(new_liquid_staking_tokens.iter()) {
-                    self.staking_position(pos_id)
-                        .update(|pos| pos.liquid_staking_nonce = new_token.token_nonce);
+                    staking_positions_mapper.update_staking_position(pos_id, |pos| {
+                        pos.liquid_staking_nonce = new_token.token_nonce
+                    });
                 }
 
-                let last_valid_id = self.last_valid_staking_position_id().get();
+                let last_valid_id = staking_positions_mapper.get_last_valid_staking_pos_id();
                 if last_pos_id == last_valid_id {
                     let current_epoch = self.blockchain().get_block_epoch();
                     self.last_staking_rewards_claim_epoch().set(&current_epoch);
@@ -316,69 +321,6 @@ pub trait StakingRewardsModule:
         self.last_rewards_update_epoch().set(current_epoch);
     }
 
-    fn get_first_staking_position_id(&self) -> u64 {
-        self.staking_position(0).get().next_pos_id
-    }
-
-    fn get_first_staking_position(&self) -> Option<StakingPosition> {
-        let first_id = self.get_first_staking_position_id();
-        if first_id != 0 {
-            Some(self.staking_position(first_id).get())
-        } else {
-            None
-        }
-    }
-
-    fn add_staking_position(&self, liquid_staking_nonce: u64) -> u64 {
-        let existing_id = self
-            .staking_position_nonce_to_id(liquid_staking_nonce)
-            .get();
-        if existing_id != 0 {
-            return existing_id;
-        }
-
-        let prev_last_id = self.last_valid_staking_position_id().get();
-        let new_last_id = prev_last_id + 1;
-
-        self.staking_position(prev_last_id)
-            .update(|last_pos| last_pos.next_pos_id = new_last_id);
-        self.staking_position(new_last_id).set(&StakingPosition {
-            next_pos_id: 0,
-            prev_pos_id: prev_last_id,
-            liquid_staking_nonce,
-        });
-
-        self.staking_position_nonce_to_id(liquid_staking_nonce)
-            .set(&new_last_id);
-        self.last_valid_staking_position_id().set(&new_last_id);
-
-        new_last_id
-    }
-
-    fn remove_staking_position(&self, pos_id: u64) {
-        if pos_id == 0 {
-            return;
-        }
-
-        let pos = self.staking_position(pos_id).get();
-
-        // re-connect nodes
-        self.staking_position(pos.prev_pos_id)
-            .update(|prev_pos| prev_pos.next_pos_id = pos.next_pos_id);
-
-        if pos.next_pos_id != 0 {
-            self.staking_position(pos.next_pos_id)
-                .update(|next_pos| next_pos.prev_pos_id = pos.prev_pos_id);
-        }
-
-        let last_valid_pos_id = self.last_valid_staking_position_id().get();
-        if pos_id == last_valid_pos_id {
-            self.last_valid_staking_position_id().set(&pos.prev_pos_id)
-        }
-
-        self.staking_position(pos_id).clear();
-    }
-
     #[proxy]
     fn dex_proxy(&self, address: ManagedAddress) -> dex_proxy::Proxy<Self::Api>;
 
@@ -394,13 +336,7 @@ pub trait StakingRewardsModule:
     fn dex_swap_sc_address(&self) -> SingleValueMapper<ManagedAddress>;
 
     #[storage_mapper("stakingPosition")]
-    fn staking_position(&self, pos_id: u64) -> SingleValueMapper<StakingPosition>;
-
-    #[storage_mapper("stakingPositionNonceToId")]
-    fn staking_position_nonce_to_id(&self, liquid_staking_nonce: u64) -> SingleValueMapper<u64>;
-
-    #[storage_mapper("lastValidStakingPositionId")]
-    fn last_valid_staking_position_id(&self) -> SingleValueMapper<u64>;
+    fn staking_positions(&self) -> StakingPositionsMapper<Self::Api>;
 
     #[view(getLastStakingRewardsClaimEpoch)]
     #[storage_mapper("lastStakingRewardsClaimEpoch")]
