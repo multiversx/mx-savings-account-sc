@@ -163,7 +163,7 @@ pub trait SavingsAccount:
         let caller = self.blockchain().get_caller();
         let borrow_tokens = self.borrow_token().nft_create_and_send(
             &caller,
-            payment.amount.clone(),
+            payment.amount,
             &borrow_token_attributes,
         );
 
@@ -381,7 +381,7 @@ pub trait SavingsAccount:
         opt_reject_if_penalty: OptionalValue<bool>,
     ) -> BigUint {
         let mut rewards_amount = self.get_lender_claimable_rewards(lend_epoch, lend_token_amount);
-        let penalty_amount = self.get_penalty_amount(&lend_token_amount);
+        let penalty_amount = self.get_penalty_amount(lend_token_amount);
         if penalty_amount > 0u32 {
             let reject = match opt_reject_if_penalty {
                 OptionalValue::Some(r) => r,
