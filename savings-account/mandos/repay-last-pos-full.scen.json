@@ -46,6 +46,12 @@
                         "2-token_id": "nested:str:LIQ-123456",
                         "3-token_nonce": "u64:8",
                         "4-amount": "biguint:250,000,000,000,000,000,000"
+                    },
+                    {
+                        "1-token_type": "u8:0",
+                        "2-token_id": "nested:str:STABLE-123456",
+                        "3-token_nonce": "u64:0",
+                        "4-amount": "biguint:35,834"
                     }
                 ],
                 "gas": "*",

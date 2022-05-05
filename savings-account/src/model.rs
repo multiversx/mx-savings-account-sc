@@ -3,7 +3,7 @@ elrond_wasm::derive_imports!();
 
 pub type LendResultType<M> = EsdtTokenPayment<M>;
 pub type BorrowResultType<M> = MultiValue2<EsdtTokenPayment<M>, EsdtTokenPayment<M>>;
-pub type RepayResultType<M> = EsdtTokenPayment<M>;
+pub type RepayResultType<M> = MultiValue2<EsdtTokenPayment<M>, EsdtTokenPayment<M>>;
 pub type WithdrawResultType<M> = EsdtTokenPayment<M>;
 pub type ClaimRewardsResultType<M> = MultiValue2<EsdtTokenPayment<M>, EsdtTokenPayment<M>>;
 

@@ -255,10 +255,11 @@ pub trait SavingsAccount:
 
         let caller = self.blockchain().get_caller();
         let extra_stablecoins_paid = stablecoin_amount - &total_stablecoins_needed;
-        if extra_stablecoins_paid > 0u32 {
-            // TODO: Return this payment
-            self.send_stablecoins(&caller, extra_stablecoins_paid);
-        }
+        let extra_stablecoins_payment = if extra_stablecoins_paid > 0u32 {
+            self.send_stablecoins(&caller, extra_stablecoins_paid)
+        } else {
+            EsdtTokenPayment::new(stablecoin_token_id, 0, BigUint::zero())
+        };
 
         let mut staking_positions_mapper = self.staking_positions();
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
@@ -283,11 +284,12 @@ pub trait SavingsAccount:
             &[],
         );
 
-        EsdtTokenPayment::new(
+        let liquid_staking_payment = EsdtTokenPayment::new(
             liquid_staking_token_id,
             liquid_staking_nonce,
             borrow_token_amount.clone(),
-        )
+        );
+        (liquid_staking_payment, extra_stablecoins_payment).into()
     }
 
     #[payable("*")]
