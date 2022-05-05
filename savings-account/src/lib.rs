@@ -7,14 +7,13 @@ mod math;
 mod model;
 mod ongoing_operation;
 mod price_aggregator_proxy;
+pub mod staking_positions_mapper;
 pub mod staking_rewards;
 pub mod tokens;
 
 use math::DEFAULT_DECIMALS;
 use model::*;
 use price_aggregator_proxy::*;
-
-use crate::staking_rewards::StakingPosition;
 
 static REPAY_INVALID_PAYMENTS_ERR_MSG: &[u8] =
     b"Must send exactly 2 types of tokens: Borrow SFTs and Stablecoins";
@@ -100,11 +99,7 @@ pub trait SavingsAccount:
         self.last_staking_rewards_claim_epoch().set(&current_epoch);
 
         // init staking position list
-        self.staking_position(0).set_if_empty(&StakingPosition {
-            liquid_staking_nonce: 0,
-            next_pos_id: 0,
-            prev_pos_id: 0,
-        });
+        self.staking_positions().init_mapper();
     }
 
     #[payable("*")]
@@ -156,7 +151,9 @@ pub trait SavingsAccount:
 
         require!(borrow_value > 0, "Deposit amount too low");
 
-        let staking_pos_id = self.add_staking_position(payment.token_nonce);
+        let staking_pos_id = self
+            .staking_positions()
+            .add_staking_position(payment.token_nonce);
         let borrow_token_attributes = BorrowMetadata {
             staking_position_id: staking_pos_id,
             borrow_epoch: self.blockchain().get_block_epoch(),
@@ -259,13 +256,14 @@ pub trait SavingsAccount:
         let caller = self.blockchain().get_caller();
         let extra_stablecoins_paid = stablecoin_amount - &total_stablecoins_needed;
         if extra_stablecoins_paid > 0u32 {
+            // TODO: Return this payment
             self.send_stablecoins(&caller, extra_stablecoins_paid);
         }
 
+        let mut staking_positions_mapper = self.staking_positions();
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
-        let liquid_staking_nonce = self
-            .staking_position(borrow_metadata.staking_position_id)
-            .get()
+        let liquid_staking_nonce = staking_positions_mapper
+            .get_staking_position(borrow_metadata.staking_position_id)
             .liquid_staking_nonce;
 
         let liquid_staking_tokens_for_nonce = self
@@ -274,7 +272,7 @@ pub trait SavingsAccount:
 
         // no tokens left after transfer, so we clear the entry
         if &liquid_staking_tokens_for_nonce == borrow_token_amount {
-            self.remove_staking_position(borrow_metadata.staking_position_id);
+            staking_positions_mapper.remove_staking_position(borrow_metadata.staking_position_id);
         }
 
         self.send().direct(
