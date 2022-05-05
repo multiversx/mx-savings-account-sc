@@ -45,6 +45,12 @@
                         "2-token_id": "nested:str:LIQ-123456",
                         "3-token_nonce": "u64:5",
                         "4-amount": "biguint:150,000,000,000,000,000,000"
+                    },
+                    {
+                        "1-token_type": "u8:0",
+                        "2-token_id": "nested:str:STABLE-123456",
+                        "3-token_nonce": "u64:0",
+                        "4-amount": "biguint:51,501"
                     }
                 ],
                 "gas": "*",
@@ -257,6 +263,12 @@
                         "2-token_id": "nested:str:LIQ-123456",
                         "3-token_nonce": "u64:5",
                         "4-amount": "biguint:100,000,000,000,000,000,000"
+                    },
+                    {
+                        "1-token_type": "u8:0",
+                        "2-token_id": "nested:str:STABLE-123456",
+                        "3-token_nonce": "u64:0",
+                        "4-amount": "biguint:35,968"
                     }
                 ],
                 "gas": "*",
