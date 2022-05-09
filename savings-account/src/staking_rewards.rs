@@ -155,12 +155,10 @@ pub trait StakingRewardsModule:
         &self,
         pos_ids: ManagedVec<u64>,
         #[payment_multi] new_liquid_staking_tokens: ManagedVec<EsdtTokenPayment<Self::Api>>,
-        #[call_result] result: ManagedAsyncCallResult<MultiValueEncoded<u64>>,
+        #[call_result] result: ManagedAsyncCallResult<()>,
     ) -> OperationCompletionStatus {
         match result {
-            // "result" contains nonces created by "ESDTNFTCreate calls on callee contract"
-            // we don't need them, as we already have them in payment call data
-            ManagedAsyncCallResult::Ok(_) => {
+            ManagedAsyncCallResult::Ok(()) => {
                 let last_pos_id = match self.load_operation() {
                     OngoingOperationType::ClaimStakingRewards {
                         pos_id,
@@ -177,6 +175,9 @@ pub trait StakingRewardsModule:
                     }
                     _ => sc_panic!("Invalid operation in callback"),
                 };
+
+                let len1 = new_liquid_staking_tokens.len();
+                let len2 = pos_ids.len();
 
                 require!(
                     new_liquid_staking_tokens.len() == pos_ids.len(),

@@ -77,13 +77,6 @@ where
         )
     }
 
-    pub fn call_claim_staking_rewards(&mut self, caller: &Address) -> TxResult {
-        self.b_mock
-            .execute_tx(caller, &self.sa_wrapper, &rust_biguint!(0), |sc| {
-                sc.claim_staking_rewards();
-            })
-    }
-
     pub fn call_borrow(
         &mut self,
         borrower: &Address,
@@ -123,6 +116,28 @@ where
             },
         )
     }
+
+    pub fn call_claim_staking_rewards(&mut self) -> TxResult {
+        self.b_mock.execute_tx(
+            &self.owner_address,
+            &self.sa_wrapper,
+            &rust_biguint!(0),
+            |sc| {
+                sc.claim_staking_rewards();
+            },
+        )
+    }
+
+    pub fn call_convert_staking_token(&mut self) -> TxResult {
+        self.b_mock.execute_tx(
+            &self.owner_address,
+            &self.sa_wrapper,
+            &rust_biguint!(0),
+            |sc| {
+                sc.convert_staking_token_to_stablecoin();
+            },
+        )
+    }
 }
 
 impl<SavingsAccountObjBuilder> SavingsAccountSetup<SavingsAccountObjBuilder>
@@ -157,7 +172,7 @@ where
             .assert_user_error("No rewards to claim");
 
         // try claim staking rewards - no staking positions
-        self.call_claim_staking_rewards(&first_lender)
+        self.call_claim_staking_rewards()
             .assert_user_error("No staking positions available");
 
         self.b_mock.set_block_epoch(21);

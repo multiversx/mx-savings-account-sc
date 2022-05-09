@@ -24,6 +24,18 @@ fn borrow_test() {
     sa_setup.default_borrows();
 }
 
+#[test]
+fn calculate_rewards_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+}
+
 /*
 #[test]
 fn test_rewards_penalty() {
