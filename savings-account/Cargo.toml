@@ -24,4 +24,10 @@ hex = "0.4"
 
 [dev-dependencies.price-aggregator]
 git = "https://github.com/ElrondNetwork/sc-chainlink-rs"
-rev = "4d4f125"
+rev = "eac874a"
+
+[dev-dependencies.delegation-mock]
+path = "../delegation-mock"
+
+[dev-dependencies.dex-mock]
+path = "../dex-mock"

@@ -18,7 +18,8 @@ pub trait DelegationMock {
 
     #[payable("EGLD")]
     #[endpoint]
-    fn stake(&self, #[payment_amount] payment_amount: BigUint) {
+    fn stake(&self) {
+        let payment_amount = self.call_value().egld_value();
         require!(payment_amount > 0, "Must pay more than 0 EGLD");
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
@@ -36,11 +37,9 @@ pub trait DelegationMock {
 
     #[payable("*")]
     #[endpoint(claimRewards)]
-    fn claim_rewards(
-        &self,
-        #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>,
-        opt_receive_funds_func: OptionalValue<ManagedBuffer>,
-    ) {
+    fn claim_rewards(&self, opt_receive_funds_func: OptionalValue<ManagedBuffer>) {
+        let payments: ManagedVec<EsdtTokenPayment<Self::Api>> =
+            self.call_value().all_esdt_transfers();
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
 
         let mut new_tokens = ManagedVec::new();
