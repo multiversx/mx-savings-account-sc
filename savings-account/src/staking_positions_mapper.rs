@@ -17,7 +17,7 @@ const LIST_HEAD_POS_ID: u64 = 0;
 pub type StakingPositionId = u64;
 pub type LiquidStakingTokenNonce = u64;
 
-#[derive(TypeAbi, TopEncode, TopDecode)]
+#[derive(TypeAbi, TopEncode, TopDecode, PartialEq, Debug)]
 pub struct StakingPosition {
     pub prev_pos_id: StakingPositionId,
     pub next_pos_id: StakingPositionId,

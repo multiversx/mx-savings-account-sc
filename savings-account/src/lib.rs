@@ -3,10 +3,10 @@
 elrond_wasm::imports!();
 
 pub mod common_storage;
-mod math;
-mod model;
-mod ongoing_operation;
-mod price_aggregator_proxy;
+pub mod math;
+pub mod model;
+pub mod ongoing_operation;
+pub mod price_aggregator_proxy;
 pub mod staking_positions_mapper;
 pub mod staking_rewards;
 pub mod tokens;

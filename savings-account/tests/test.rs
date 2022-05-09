@@ -1,10 +1,27 @@
+mod savings_account_interactions;
 mod savings_account_setup;
 
+use elrond_wasm_debug::DebugApi;
 use savings_account_setup::*;
 
 #[test]
 fn init_test() {
     let _ = SavingsAccountSetup::new(savings_account::contract_obj);
+}
+
+#[test]
+fn lend_test() {
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    sa_setup.default_lenders();
+}
+
+#[test]
+fn borrow_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
 }
 
 /*

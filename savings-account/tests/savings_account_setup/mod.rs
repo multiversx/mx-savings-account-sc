@@ -7,8 +7,6 @@ use elrond_wasm_debug::{
     testing_framework::*, DebugApi,
 };
 use price_aggregator::PriceAggregator;
-use savings_account::common_storage::CommonStorageModule;
-use savings_account::staking_rewards::StakingRewardsModule;
 use savings_account::tokens::TokensModule;
 use savings_account::*;
 
@@ -83,6 +81,8 @@ where
             STABLECOIN_TOKEN_ID,
             &rust_biguint!(100_000),
         );
+
+        b_mock.set_block_epoch(10);
 
         b_mock
             .execute_tx(&owner_address, &sa_wrapper, &rust_zero, |sc| {
