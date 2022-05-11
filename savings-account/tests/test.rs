@@ -205,3 +205,94 @@ fn claim_rewards_test() {
         })
         .assert_ok();
 }
+
+#[test]
+fn withdraw_before_claim_rewards_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let first_lender = sa_setup.first_lender_address.clone();
+    let second_lender = sa_setup.second_lender_address.clone();
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+
+    sa_setup.b_mock.set_block_epoch(50);
+
+    // withdraw the initial 50,000 lent + 3,167 as rewards (calculate in previous test)
+    sa_setup
+        .call_withdraw(&second_lender, 2, 50_000, 53_167)
+        .assert_ok();
+
+    sa_setup.b_mock.check_esdt_balance(
+        &second_lender,
+        STABLECOIN_TOKEN_ID,
+        &rust_biguint!(50_000 + 53_167),
+    );
+
+    sa_setup
+        .b_mock
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            assert_eq!(sc.lent_amount().get(), managed_biguint!(100_000));
+            assert_eq!(sc.borrowed_amount().get(), managed_biguint!(75_000));
+        })
+        .assert_ok();
+
+    // first lender try withdraw, not enough lent_amount left
+    sa_setup
+        .call_withdraw(&first_lender, 1, 100_000, 0)
+        .assert_user_error("Cannot withdraw, not enough funds");
+}
+
+#[test]
+fn withdraw_after_claim_rewards_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let second_lender = sa_setup.second_lender_address.clone();
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+
+    sa_setup.b_mock.set_block_epoch(50);
+
+    sa_setup
+        .call_lender_claim_rewards(&second_lender, 2, 50_000, 3, 3_167, false)
+        .assert_ok();
+    sa_setup
+        .call_withdraw(&second_lender, 3, 50_000, 50_000)
+        .assert_ok();
+
+    sa_setup.b_mock.check_esdt_balance(
+        &second_lender,
+        STABLECOIN_TOKEN_ID,
+        &rust_biguint!(50_000 + 53_167),
+    );
+}
+
+#[test]
+fn withdraw_partial_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let second_lender = sa_setup.second_lender_address.clone();
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+
+    sa_setup.b_mock.set_block_epoch(50);
+
+    // intial 25_000 + ~(3_167 / 2)
+    sa_setup
+        .call_withdraw(&second_lender, 2, 25_000, 26_584)
+        .assert_ok();
+
+    // since there is less total lent amount now, the penalty amount per lend token increases,
+    // so less is withdrawn
+    sa_setup
+        .call_withdraw(&second_lender, 2, 25_000, 26_175)
+        .assert_ok();
+}

@@ -77,6 +77,29 @@ where
         )
     }
 
+    pub fn call_withdraw(
+        &mut self,
+        lender: &Address,
+        lend_token_nonce: u64,
+        lend_token_amount: u64,
+        expected_withdraw_amount: u64,
+    ) -> TxResult {
+        self.b_mock.execute_esdt_transfer(
+            lender,
+            &self.sa_wrapper,
+            LEND_TOKEN_ID,
+            lend_token_nonce,
+            &rust_biguint!(lend_token_amount),
+            |sc| {
+                let stablecoin_out = sc.withdraw(OptionalValue::None);
+                assert_eq!(
+                    stablecoin_out.amount,
+                    managed_biguint!(expected_withdraw_amount)
+                );
+            },
+        )
+    }
+
     pub fn call_borrow(
         &mut self,
         borrower: &Address,
