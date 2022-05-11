@@ -47,7 +47,7 @@ where
         lend_token_amount: u64,
         expected_new_lend_nonce: u64,
         expected_rewards_amount: u64,
-        accept_penalty: bool,
+        reject_penalty: bool,
     ) -> TxResult {
         self.b_mock.execute_esdt_transfer(
             lender,
@@ -57,7 +57,7 @@ where
             &rust_biguint!(lend_token_amount),
             |sc| {
                 let (new_lend_tokens, rewards) = sc
-                    .lender_claim_rewards(OptionalValue::Some(accept_penalty))
+                    .lender_claim_rewards(OptionalValue::Some(reject_penalty))
                     .into_tuple();
 
                 assert_eq!(
@@ -137,6 +137,31 @@ where
                 sc.convert_staking_token_to_stablecoin();
             },
         )
+    }
+
+    pub fn call_get_penaly_amount(&mut self, lend_amount: u64) -> u64 {
+        let mut penalty = 0;
+        self.b_mock
+            .execute_query(&self.sa_wrapper, |sc| {
+                let penalty_biguint = sc.get_penalty_amount_view(managed_biguint!(lend_amount));
+                penalty = penalty_biguint.to_u64().unwrap();
+            })
+            .assert_ok();
+
+        penalty
+    }
+
+    pub fn call_get_lender_claimable_rewards(&mut self, lend_epoch: u64, lend_amount: u64) -> u64 {
+        let mut rewards = 0;
+        self.b_mock
+            .execute_query(&self.sa_wrapper, |sc| {
+                let rewards_biguint =
+                    sc.get_lender_claimable_rewards_view(lend_epoch, managed_biguint!(lend_amount));
+                rewards = rewards_biguint.to_u64().unwrap();
+            })
+            .assert_ok();
+
+        rewards
     }
 }
 
