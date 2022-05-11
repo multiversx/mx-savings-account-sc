@@ -3,6 +3,7 @@ use crate::savings_account_setup::{
     NR_STAKING_POSITIONS, STABLECOIN_TOKEN_ID,
 };
 use elrond_wasm::{elrond_codec::multi_types::OptionalValue, types::Address};
+use elrond_wasm_debug::tx_mock::TxInputESDT;
 use elrond_wasm_debug::{
     managed_biguint, managed_token_id, rust_biguint, tx_mock::TxResult, DebugApi,
 };
@@ -138,6 +139,56 @@ where
                 );
             },
         )
+    }
+
+    pub fn call_repay(
+        &mut self,
+        borrower: &Address,
+        borrow_token_nonce: u64,
+        borrow_token_amount: &num_bigint::BigUint,
+        stablecoin_amount: u64,
+        expected_liq_staking_token_nonce: u64,
+        expected_leftover_stablecoins: u64,
+    ) -> TxResult {
+        let transfers = vec![
+            TxInputESDT {
+                token_identifier: BORROW_TOKEN_ID.to_vec(),
+                nonce: borrow_token_nonce,
+                value: borrow_token_amount.clone(),
+            },
+            TxInputESDT {
+                token_identifier: STABLECOIN_TOKEN_ID.to_vec(),
+                nonce: 0,
+                value: rust_biguint!(stablecoin_amount),
+            },
+        ];
+        self.b_mock
+            .execute_esdt_multi_transfer(borrower, &self.sa_wrapper, &transfers, |sc| {
+                let (liq_staking_tokens, leftover_stablecoins) = sc.repay().into_tuple();
+
+                assert_eq!(
+                    liq_staking_tokens.token_identifier,
+                    managed_token_id!(LIQUID_STAKING_TOKEN_ID)
+                );
+                assert_eq!(
+                    liq_staking_tokens.token_nonce,
+                    expected_liq_staking_token_nonce
+                );
+                assert_eq!(
+                    liq_staking_tokens.amount,
+                    elrond_wasm::types::BigUint::from_bytes_be(&borrow_token_amount.to_bytes_be())
+                );
+
+                assert_eq!(
+                    leftover_stablecoins.token_identifier,
+                    managed_token_id!(STABLECOIN_TOKEN_ID)
+                );
+                assert_eq!(leftover_stablecoins.token_nonce, 0);
+                assert_eq!(
+                    leftover_stablecoins.amount,
+                    managed_biguint!(expected_leftover_stablecoins)
+                );
+            })
     }
 
     pub fn call_claim_staking_rewards(&mut self) -> TxResult {
@@ -322,5 +373,85 @@ where
 
         self.b_mock
             .check_esdt_balance(&borrower, STABLECOIN_TOKEN_ID, &rust_biguint!(4 * 18_750));
+    }
+
+    pub fn default_claim_rewards(&mut self) {
+        let first_lender = self.first_lender_address.clone();
+        let second_lender = self.second_lender_address.clone();
+
+        self.b_mock.set_block_epoch(50);
+
+        // 100,000 out of total 150,000 => ~66% of 12,250
+        assert_eq!(self.call_get_penaly_amount(100_000), 8_166);
+
+        // 50,000 out of total 150,000 => ~33% of 12,250
+        assert_eq!(self.call_get_penaly_amount(50_000), 4_083);
+
+        // (50 - 20) * 0.5% * 100,000 - 6,125 = 15,000 - 8,166 = 6,834
+        let first_lender_rewards = 6_834;
+        assert_eq!(
+            self.call_get_lender_claimable_rewards(20, 100_000),
+            first_lender_rewards
+        );
+
+        // (50 - 21) * 0.5% * 50,000 - 4,083 = 7,250 - 4,083 = 3,167
+        let second_lender_rewards = 3_167;
+        assert_eq!(
+            self.call_get_lender_claimable_rewards(21, 50_000),
+            second_lender_rewards
+        );
+
+        // lender 1 try claim without penalty
+        self.call_lender_claim_rewards(&first_lender, 1, 100_000, 3, first_lender_rewards, true)
+            .assert_user_error("Rewards have penalty");
+
+        // lender 1 claim ok
+        self.call_lender_claim_rewards(&first_lender, 1, 100_000, 3, first_lender_rewards, false)
+            .assert_ok();
+
+        self.b_mock.check_nft_balance(
+            &first_lender,
+            LEND_TOKEN_ID,
+            3,
+            &rust_biguint!(100_000),
+            Some(&LendMetadata { lend_epoch: 50 }),
+        );
+        self.b_mock.check_esdt_balance(
+            &first_lender,
+            STABLECOIN_TOKEN_ID,
+            &rust_biguint!(first_lender_rewards),
+        );
+
+        // lender 2 claim ok
+        self.call_lender_claim_rewards(&second_lender, 2, 50_000, 3, second_lender_rewards, false)
+            .assert_ok();
+
+        // lender 1 and 2 now have same lend token nonce (because of same lend_epoch)
+        // also, lender 2 initially has 50_000 stablecoins, as they only lent half
+        self.b_mock.check_nft_balance(
+            &second_lender,
+            LEND_TOKEN_ID,
+            3,
+            &rust_biguint!(50_000),
+            Some(&LendMetadata { lend_epoch: 50 }),
+        );
+        self.b_mock.check_esdt_balance(
+            &second_lender,
+            STABLECOIN_TOKEN_ID,
+            &rust_biguint!(50_000 + second_lender_rewards),
+        );
+
+        // check Savings Account internal state
+        self.b_mock
+            .execute_query(&self.sa_wrapper, |sc| {
+                assert_eq!(sc.last_rewards_update_epoch().get(), 50);
+                assert_eq!(sc.stablecoin_reserves().get(), managed_biguint!(0));
+                assert_eq!(
+                    sc.total_missed_rewards_by_claim_since_last_calculation()
+                        .get(),
+                    managed_biguint!(8_166 + 4_083)
+                );
+            })
+            .assert_ok();
     }
 }
