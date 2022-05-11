@@ -15,12 +15,12 @@ pub struct PoolParams<M: ManagedTypeApi> {
     pub optimal_utilisation: BigUint<M>,
 }
 
-#[derive(TypeAbi, TopEncode, TopDecode)]
+#[derive(TypeAbi, TopEncode, TopDecode, PartialEq, Debug)]
 pub struct LendMetadata {
     pub lend_epoch: u64,
 }
 
-#[derive(TypeAbi, TopEncode, TopDecode)]
+#[derive(TypeAbi, TopEncode, TopDecode, PartialEq, Debug)]
 pub struct BorrowMetadata<M: ManagedTypeApi> {
     pub staking_position_id: u64,
     pub borrow_epoch: u64,

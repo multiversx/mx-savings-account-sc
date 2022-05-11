@@ -1,321 +1,479 @@
-/*
+mod savings_account_interactions;
+mod savings_account_setup;
 
-use elrond_wasm::elrond_codec::multi_types::OptionalValue;
-use elrond_wasm::storage::mappers::StorageTokenWrapper;
-use elrond_wasm::types::{Address, EsdtLocalRole, ManagedBuffer, OperationCompletionStatus};
-use elrond_wasm_debug::{
-    managed_address, managed_biguint, managed_token_id, rust_biguint, testing_framework::*,
-    DebugApi,
-};
+use elrond_wasm_debug::{managed_biguint, rust_biguint, DebugApi};
 use savings_account::common_storage::CommonStorageModule;
+use savings_account::model::BorrowMetadata;
+use savings_account::staking_positions_mapper::StakingPosition;
 use savings_account::staking_rewards::StakingRewardsModule;
-use savings_account::tokens::TokensModule;
-use savings_account::*;
-
-const DUMMY_WASM_PATH: &'static str = "";
-const STABLECOIN_TOKEN_ID: &[u8] = b"STABLE-123456";
-const LIQUID_STAKING_TOKEN_ID: &[u8] = b"LIQ-123456";
-const STAKED_TOKEN_ID: &[u8] = b"";
-const STAKED_TOKEN_TICKER: &[u8] = b"EGLD";
-const LOAN_TO_VALUE_PERCENTAGE: u64 = 750_000_000; // 75%
-const LENDER_REWARDS_PERCENTAGE_PER_EPOCH: u64 = 5_000_000; // 0.5%
-const BASE_BORROW_RATE: u64 = 500_000_000; // 50%
-const BORROW_RATE_UNDER_OPTIMAL_FACTOR: u64 = 100_000_000; // 10%
-const BORROW_RATE_OVER_OPTIMAL_FACTOR: u64 = 100_000_000; // 10%
-const OPTIMAL_UTILISATION: u64 = 750_000_000; // 75%
-
-const LEND_TOKEN_ID: &[u8] = b"LEND-123456";
-const BORROW_TOKEN_ID: &[u8] = b"BORROW-123456";
-
-struct SavingsAccountSetup<SavingsAccountObjBuilder>
-where
-    SavingsAccountObjBuilder: 'static + Copy + Fn() -> savings_account::ContractObj<DebugApi>,
-{
-    pub blockchain_wrapper: BlockchainStateWrapper,
-    pub owner_address: Address,
-    pub first_lender_address: Address,
-    pub second_lender_address: Address,
-    pub _first_borrower_address: Address,
-    pub _second_borrower_address: Address,
-    pub sa_wrapper:
-        ContractObjWrapper<savings_account::ContractObj<DebugApi>, SavingsAccountObjBuilder>,
-}
-
-fn setup_savings_account<SavingsAccountObjBuilder>(
-    sa_builder: SavingsAccountObjBuilder,
-) -> SavingsAccountSetup<SavingsAccountObjBuilder>
-where
-    SavingsAccountObjBuilder: 'static + Copy + Fn() -> savings_account::ContractObj<DebugApi>,
-{
-    let rust_zero = rust_biguint!(0u64);
-    let mut blockchain_wrapper = BlockchainStateWrapper::new();
-    let owner_address = blockchain_wrapper.create_user_account(&rust_zero);
-    let first_lender_address = blockchain_wrapper.create_user_account(&rust_zero);
-    let second_lender_address = blockchain_wrapper.create_user_account(&rust_zero);
-    let first_borrower_address = blockchain_wrapper.create_user_account(&rust_zero);
-    let second_borrower_address = blockchain_wrapper.create_user_account(&rust_zero);
-
-    blockchain_wrapper.set_block_epoch(10);
-
-    // they use the SavingsAccount SC builder, as we only really need their addresses
-    // Async calls don't work yet, so we can't use the other two contracts
-    let delegation_wrapper = blockchain_wrapper.create_sc_account(
-        &rust_zero,
-        Some(&owner_address),
-        sa_builder,
-        DUMMY_WASM_PATH,
-    );
-    let dex_wrapper = blockchain_wrapper.create_sc_account(
-        &rust_zero,
-        Some(&owner_address),
-        sa_builder,
-        DUMMY_WASM_PATH,
-    );
-
-    let price_aggregator_wrapper = blockchain_wrapper.create_sc_account(
-        &rust_zero,
-        Some(&owner_address),
-        price_aggregator::contract_obj,
-        DUMMY_WASM_PATH,
-    );
-    let sa_wrapper = blockchain_wrapper.create_sc_account(
-        &rust_zero,
-        Some(&owner_address),
-        sa_builder,
-        DUMMY_WASM_PATH,
-    );
-
-    blockchain_wrapper.set_esdt_balance(
-        &first_lender_address,
-        STABLECOIN_TOKEN_ID,
-        &rust_biguint!(100_000),
-    );
-    blockchain_wrapper.set_esdt_balance(
-        &second_lender_address,
-        STABLECOIN_TOKEN_ID,
-        &rust_biguint!(100_000),
-    );
-
-    let nft_balance = rust_biguint!(250) * rust_biguint!(1_000_000_000_000_000_000);
-    blockchain_wrapper.set_nft_balance(
-        &first_borrower_address,
-        LIQUID_STAKING_TOKEN_ID,
-        1,
-        &nft_balance,
-        &(),
-    );
-    blockchain_wrapper.set_nft_balance(
-        &second_borrower_address,
-        LIQUID_STAKING_TOKEN_ID,
-        2,
-        &nft_balance,
-        &(),
-    );
-
-    blockchain_wrapper
-        .execute_tx(&owner_address, &sa_wrapper, &rust_zero, |sc| {
-            sc.init(
-                managed_token_id!(STABLECOIN_TOKEN_ID),
-                managed_token_id!(LIQUID_STAKING_TOKEN_ID),
-                managed_token_id!(STAKED_TOKEN_ID),
-                ManagedBuffer::new_from_bytes(STAKED_TOKEN_TICKER),
-                managed_address!(delegation_wrapper.address_ref()),
-                managed_address!(dex_wrapper.address_ref()),
-                managed_address!(price_aggregator_wrapper.address_ref()),
-                managed_biguint!(LOAN_TO_VALUE_PERCENTAGE),
-                managed_biguint!(LENDER_REWARDS_PERCENTAGE_PER_EPOCH),
-                managed_biguint!(BASE_BORROW_RATE),
-                managed_biguint!(BORROW_RATE_UNDER_OPTIMAL_FACTOR),
-                managed_biguint!(BORROW_RATE_OVER_OPTIMAL_FACTOR),
-                managed_biguint!(OPTIMAL_UTILISATION),
-            );
-
-            sc.lend_token()
-                .set_token_id(&managed_token_id!(LEND_TOKEN_ID));
-            sc.borrow_token()
-                .set_token_id(&managed_token_id!(BORROW_TOKEN_ID));
-        })
-        .assert_ok();
-
-    let roles = [
-        EsdtLocalRole::NftCreate,
-        EsdtLocalRole::NftAddQuantity,
-        EsdtLocalRole::NftBurn,
-    ];
-    blockchain_wrapper.set_esdt_local_roles(sa_wrapper.address_ref(), LEND_TOKEN_ID, &roles[..]);
-    blockchain_wrapper.set_esdt_local_roles(sa_wrapper.address_ref(), BORROW_TOKEN_ID, &roles[..]);
-
-    SavingsAccountSetup {
-        blockchain_wrapper,
-        owner_address,
-        first_lender_address,
-        second_lender_address,
-        _first_borrower_address: first_borrower_address,
-        _second_borrower_address: second_borrower_address,
-        sa_wrapper,
-    }
-}
+use savings_account_setup::*;
 
 #[test]
 fn init_test() {
-    let _ = setup_savings_account(savings_account::contract_obj);
+    let _ = SavingsAccountSetup::new(savings_account::contract_obj);
 }
 
 #[test]
-fn test_rewards_penalty() {
-    let mut sa_setup = setup_savings_account(savings_account::contract_obj);
-    let b_wrapper = &mut sa_setup.blockchain_wrapper;
+fn lend_test() {
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    sa_setup.default_lenders();
+}
 
-    b_wrapper.set_block_epoch(20);
+#[test]
+fn borrow_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
 
-    b_wrapper
-        .execute_esdt_transfer(
-            &sa_setup.first_lender_address,
-            &sa_setup.sa_wrapper,
-            STABLECOIN_TOKEN_ID,
-            0,
-            &rust_biguint!(100_000),
-            |sc| {
-                sc.lend();
-            },
-        )
-        .assert_ok();
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+}
 
-    b_wrapper
-        .execute_esdt_transfer(
-            &sa_setup.second_lender_address,
-            &sa_setup.sa_wrapper,
-            STABLECOIN_TOKEN_ID,
-            0,
-            &rust_biguint!(100_000),
-            |sc| {
-                sc.lend();
-            },
-        )
-        .assert_ok();
+#[test]
+fn calculate_rewards_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
 
-    b_wrapper.set_block_epoch(25);
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
 
-    // set state required for calculate rewards to be callable
-    b_wrapper
-        .execute_tx(
-            &sa_setup.owner_address,
-            &sa_setup.sa_wrapper,
-            &rust_biguint!(0),
-            |sc| {
-                sc.last_staking_rewards_claim_epoch().set(&25);
-                sc.last_staking_token_convert_epoch().set(&25);
-                sc.stablecoin_reserves().set(&managed_biguint!(500));
-            },
-        )
-        .assert_ok();
+    // check balance before
+    sa_setup.b_mock.check_esdt_balance(
+        sa_setup.sa_wrapper.address_ref(),
+        STABLECOIN_TOKEN_ID,
+        &rust_biguint!(75_000),
+    );
+    let liq_staking_token_balance = rust_biguint!(STAKE_PER_POSITION) * DECIMALS;
+    for i in 1..4u64 {
+        sa_setup.b_mock.check_nft_balance(
+            sa_setup.sa_wrapper.address_ref(),
+            LIQUID_STAKING_TOKEN_ID,
+            i,
+            &liq_staking_token_balance,
+            Some(&elrond_wasm::elrond_codec::Empty),
+        );
+    }
 
-    b_wrapper
-        .execute_tx(
-            &sa_setup.owner_address,
-            &sa_setup.sa_wrapper,
-            &rust_biguint!(0),
-            |sc| {
-                let op_status = sc.calculate_total_lender_rewards();
-                assert_eq!(op_status, OperationCompletionStatus::Completed);
-            },
-        )
-        .assert_ok();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
 
-    // expected rewards is 0.5% * 100_000 * (5 epochs) = 2.5% * 100_000 = 2_500 per lender
-    // i.e. 5_000 total rewards
-    b_wrapper
+    // check balance after, received 10K stablecoins and new LIQ staking tokens
+    sa_setup.b_mock.check_esdt_balance(
+        sa_setup.sa_wrapper.address_ref(),
+        STABLECOIN_TOKEN_ID,
+        &rust_biguint!(85_000),
+    );
+    for i in 5..8u64 {
+        sa_setup.b_mock.check_nft_balance(
+            sa_setup.sa_wrapper.address_ref(),
+            LIQUID_STAKING_TOKEN_ID,
+            i,
+            &liq_staking_token_balance,
+            Some(&elrond_wasm::elrond_codec::Empty),
+        );
+    }
+
+    // check staking positions consistency - liquid_staking_nonce changed
+    sa_setup
+        .b_mock
         .execute_query(&sa_setup.sa_wrapper, |sc| {
-            let unclaimed_rewards = sc.unclaimed_rewards().get();
-            assert_eq!(unclaimed_rewards, managed_biguint!(500));
-
-            let missing_rewards = sc.missing_rewards().get();
-            assert_eq!(missing_rewards, managed_biguint!(4_500));
-
-            let penalty_per_lender = sc.penalty_amount_per_lender().get();
-            assert_eq!(penalty_per_lender, managed_biguint!(2_250));
+            // check staking positions mapper
+            let mapper = sc.staking_positions();
+            assert_eq!(
+                mapper.get_staking_position(1),
+                StakingPosition {
+                    liquid_staking_nonce: 5,
+                    prev_pos_id: 0,
+                    next_pos_id: 2,
+                }
+            );
+            assert_eq!(
+                mapper.get_staking_position(2),
+                StakingPosition {
+                    liquid_staking_nonce: 6,
+                    prev_pos_id: 1,
+                    next_pos_id: 3,
+                }
+            );
+            assert_eq!(
+                mapper.get_staking_position(3),
+                StakingPosition {
+                    liquid_staking_nonce: 7,
+                    prev_pos_id: 2,
+                    next_pos_id: 4,
+                }
+            );
+            assert_eq!(
+                mapper.get_staking_position(4),
+                StakingPosition {
+                    liquid_staking_nonce: 8,
+                    prev_pos_id: 3,
+                    next_pos_id: 0,
+                }
+            );
         })
         .assert_ok();
+}
 
-    // lender 1 claim, should claim 2_500 - 2_250 = 250
-    b_wrapper
-        .execute_esdt_transfer(
-            &sa_setup.first_lender_address,
-            &sa_setup.sa_wrapper,
-            LEND_TOKEN_ID,
-            1,
-            &rust_biguint!(100_000),
-            |sc| {
-                sc.lender_claim_rewards(OptionalValue::None);
-            },
-        )
+#[test]
+fn claim_rewards_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+    sa_setup.default_claim_rewards();
+}
+
+#[test]
+fn withdraw_before_claim_rewards_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let first_lender = sa_setup.first_lender_address.clone();
+    let second_lender = sa_setup.second_lender_address.clone();
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+
+    sa_setup.b_mock.set_block_epoch(50);
+
+    // withdraw the initial 50,000 lent + 3,167 as rewards (calculate in previous test)
+    sa_setup
+        .call_withdraw(&second_lender, 2, 50_000, 53_167)
         .assert_ok();
 
-    b_wrapper.check_esdt_balance(
-        &sa_setup.first_lender_address,
+    sa_setup.b_mock.check_esdt_balance(
+        &second_lender,
         STABLECOIN_TOKEN_ID,
-        &rust_biguint!(250),
+        &rust_biguint!(50_000 + 53_167),
     );
 
-    // assume lender2 waited and claimed rewards later, when penalty was lifted
-    b_wrapper.set_block_epoch(26);
-
-    b_wrapper
-        .execute_tx(
-            &sa_setup.owner_address,
-            &sa_setup.sa_wrapper,
-            &rust_biguint!(0),
-            |sc| {
-                sc.last_staking_rewards_claim_epoch().set(&26);
-                sc.last_staking_token_convert_epoch().set(&26);
-                sc.stablecoin_reserves().set(&managed_biguint!(10_000));
-            },
-        )
-        .assert_ok();
-
-    b_wrapper
-        .execute_tx(
-            &sa_setup.owner_address,
-            &sa_setup.sa_wrapper,
-            &rust_biguint!(0),
-            |sc| {
-                let op_status = sc.calculate_total_lender_rewards();
-                assert_eq!(op_status, OperationCompletionStatus::Completed);
-            },
-        )
-        .assert_ok();
-
-    b_wrapper
+    sa_setup
+        .b_mock
         .execute_query(&sa_setup.sa_wrapper, |sc| {
-            let unclaimed_rewards = sc.unclaimed_rewards().get();
-            assert_eq!(unclaimed_rewards, managed_biguint!(3_500));
-
-            let missing_rewards = sc.missing_rewards().get();
-            assert_eq!(missing_rewards, managed_biguint!(0));
-
-            let penalty_per_lender = sc.penalty_amount_per_lender().get();
-            assert_eq!(penalty_per_lender, managed_biguint!(0));
+            assert_eq!(sc.lent_amount().get(), managed_biguint!(100_000));
+            assert_eq!(sc.borrowed_amount().get(), managed_biguint!(75_000));
         })
         .assert_ok();
 
-    // lender 2 claim, will get the full amount of 3_000
-    b_wrapper
-        .execute_esdt_transfer(
-            &sa_setup.second_lender_address,
-            &sa_setup.sa_wrapper,
-            LEND_TOKEN_ID,
-            2,
-            &rust_biguint!(100_000),
-            |sc| {
-                sc.lender_claim_rewards(OptionalValue::None);
-            },
-        )
+    // first lender try withdraw, not enough lent_amount left
+    sa_setup
+        .call_withdraw(&first_lender, 1, 100_000, 0)
+        .assert_user_error("Cannot withdraw, not enough funds");
+}
+
+#[test]
+fn withdraw_after_claim_rewards_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let second_lender = sa_setup.second_lender_address.clone();
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+
+    sa_setup.b_mock.set_block_epoch(50);
+
+    sa_setup
+        .call_lender_claim_rewards(&second_lender, 2, 50_000, 3, 3_167, false)
+        .assert_ok();
+    sa_setup
+        .call_withdraw(&second_lender, 3, 50_000, 50_000)
         .assert_ok();
 
-    b_wrapper.check_esdt_balance(
-        &sa_setup.second_lender_address,
+    sa_setup.b_mock.check_esdt_balance(
+        &second_lender,
         STABLECOIN_TOKEN_ID,
-        &rust_biguint!(3_000),
+        &rust_biguint!(50_000 + 53_167),
     );
 }
-*/
+
+#[test]
+fn withdraw_partial_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let second_lender = sa_setup.second_lender_address.clone();
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+
+    sa_setup.b_mock.set_block_epoch(50);
+
+    // intial 25_000 + ~(3_167 / 2)
+    sa_setup
+        .call_withdraw(&second_lender, 2, 25_000, 26_584)
+        .assert_ok();
+
+    // since there is less total lent amount now, the penalty amount per lend token increases,
+    // so less is withdrawn
+    sa_setup
+        .call_withdraw(&second_lender, 2, 25_000, 26_175)
+        .assert_ok();
+}
+
+#[test]
+fn repay_full_first_pos_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let borrower = sa_setup.borrower_address.clone();
+    let borrow_token_amount = rust_biguint!(STAKE_PER_POSITION) * DECIMALS;
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+    sa_setup.default_claim_rewards();
+
+    // one year after borrow
+    sa_setup.b_mock.set_block_epoch(390);
+
+    sa_setup
+        .b_mock
+        .check_esdt_balance(&borrower, STABLECOIN_TOKEN_ID, &rust_biguint!(75_000));
+
+    // repay - too few stablecoins
+    sa_setup
+        .call_repay(&borrower, 1, &borrow_token_amount, 10_000, 5, 0)
+        .assert_user_error("Not enough stablecoins paid to cover the debt");
+
+    // repay - ok
+    // borrow rate = 50% + 2/3 * 10% = 56,66%, which leads to 25,000 * 56,66% = 14,165 debt,
+    // so ~39,165 as total amount needed
+    sa_setup
+        .call_repay(&borrower, 1, &borrow_token_amount, 75_000, 5, 35_834)
+        .assert_ok();
+
+    sa_setup.b_mock.check_nft_balance(
+        &borrower,
+        LIQUID_STAKING_TOKEN_ID,
+        5,
+        &borrow_token_amount,
+        Some(&elrond_wasm::elrond_codec::Empty),
+    );
+    sa_setup
+        .b_mock
+        .check_esdt_balance(&borrower, STABLECOIN_TOKEN_ID, &rust_biguint!(35_834));
+
+    // check staking positions list consistency
+    sa_setup
+        .b_mock
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            // check staking positions mapper
+            let mapper = sc.staking_positions();
+            assert_eq!(
+                mapper.get_staking_position(2),
+                StakingPosition {
+                    liquid_staking_nonce: 6,
+                    prev_pos_id: 0,
+                    next_pos_id: 3,
+                }
+            );
+            assert_eq!(
+                mapper.get_staking_position(3),
+                StakingPosition {
+                    liquid_staking_nonce: 7,
+                    prev_pos_id: 2,
+                    next_pos_id: 4,
+                }
+            );
+            assert_eq!(
+                mapper.get_staking_position(4),
+                StakingPosition {
+                    liquid_staking_nonce: 8,
+                    prev_pos_id: 3,
+                    next_pos_id: 0,
+                }
+            );
+        })
+        .assert_ok();
+
+    // position with ID 1 is now invalid
+    sa_setup
+        .b_mock
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            let _ = sc.staking_positions().get_staking_position(1);
+        })
+        .assert_user_error("Invalid staking position ID");
+}
+
+#[test]
+fn repay_other_pos_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let borrower = sa_setup.borrower_address.clone();
+    let borrow_token_amount = rust_biguint!(STAKE_PER_POSITION) * DECIMALS;
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+    sa_setup.default_claim_rewards();
+
+    // one year after borrow
+    sa_setup.b_mock.set_block_epoch(390);
+
+    sa_setup
+        .call_repay(&borrower, 3, &borrow_token_amount, 75_000, 7, 35_834)
+        .assert_ok();
+
+    // check staking positions list consistency
+    sa_setup
+        .b_mock
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            // check staking positions mapper
+            let mapper = sc.staking_positions();
+            assert_eq!(
+                mapper.get_staking_position(1),
+                StakingPosition {
+                    liquid_staking_nonce: 5,
+                    prev_pos_id: 0,
+                    next_pos_id: 2,
+                }
+            );
+            assert_eq!(
+                mapper.get_staking_position(2),
+                StakingPosition {
+                    liquid_staking_nonce: 6,
+                    prev_pos_id: 1,
+                    next_pos_id: 4,
+                }
+            );
+            assert_eq!(
+                mapper.get_staking_position(4),
+                StakingPosition {
+                    liquid_staking_nonce: 8,
+                    prev_pos_id: 2,
+                    next_pos_id: 0,
+                }
+            );
+        })
+        .assert_ok();
+
+    // position with ID 3 is now invalid
+    sa_setup
+        .b_mock
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            let _ = sc.staking_positions().get_staking_position(3);
+        })
+        .assert_user_error("Invalid staking position ID");
+}
+
+#[test]
+fn repay_last_pos_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let borrower = sa_setup.borrower_address.clone();
+    let borrow_token_amount = rust_biguint!(STAKE_PER_POSITION) * DECIMALS;
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+    sa_setup.default_claim_rewards();
+
+    // one year after borrow
+    sa_setup.b_mock.set_block_epoch(390);
+
+    sa_setup
+        .call_repay(&borrower, 4, &borrow_token_amount, 75_000, 8, 35_834)
+        .assert_ok();
+
+    // check staking positions list consistency
+    sa_setup
+        .b_mock
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            // check staking positions mapper
+            let mapper = sc.staking_positions();
+            assert_eq!(
+                mapper.get_staking_position(1),
+                StakingPosition {
+                    liquid_staking_nonce: 5,
+                    prev_pos_id: 0,
+                    next_pos_id: 2,
+                }
+            );
+            assert_eq!(
+                mapper.get_staking_position(2),
+                StakingPosition {
+                    liquid_staking_nonce: 6,
+                    prev_pos_id: 1,
+                    next_pos_id: 3,
+                }
+            );
+            assert_eq!(
+                mapper.get_staking_position(3),
+                StakingPosition {
+                    liquid_staking_nonce: 7,
+                    prev_pos_id: 2,
+                    next_pos_id: 0,
+                }
+            );
+        })
+        .assert_ok();
+
+    // position with ID 4 is now invalid
+    sa_setup
+        .b_mock
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            let _ = sc.staking_positions().get_staking_position(4);
+        })
+        .assert_user_error("Invalid staking position ID");
+}
+
+#[test]
+fn repay_partial_test() {
+    let _ = DebugApi::dummy();
+    let mut sa_setup = SavingsAccountSetup::new(savings_account::contract_obj);
+    let borrower = sa_setup.borrower_address.clone();
+    let borrow_token_amount = rust_biguint!(150) * DECIMALS;
+
+    sa_setup.default_lenders();
+    sa_setup.default_borrows();
+    sa_setup.call_claim_staking_rewards().assert_ok();
+    sa_setup.call_convert_staking_token().assert_ok();
+    sa_setup.default_claim_rewards();
+
+    // one year after borrow
+    sa_setup.b_mock.set_block_epoch(390);
+
+    // repay 150 out of the total 250
+    sa_setup
+        .call_repay(&borrower, 1, &borrow_token_amount, 75_000, 5, 51_501)
+        .assert_ok();
+
+    sa_setup.b_mock.check_nft_balance(
+        &borrower,
+        BORROW_TOKEN_ID,
+        1,
+        &(rust_biguint!(100) * DECIMALS),
+        Some(&BorrowMetadata::<DebugApi> {
+            borrow_epoch: 25,
+            staking_position_id: 1,
+            staked_token_value_in_dollars_at_borrow: managed_biguint!(100),
+        }),
+    );
+    sa_setup.b_mock.check_nft_balance(
+        &borrower,
+        LIQUID_STAKING_TOKEN_ID,
+        5,
+        &(rust_biguint!(150) * DECIMALS),
+        Option::<&elrond_wasm::elrond_codec::Empty>::None,
+    );
+    sa_setup
+        .b_mock
+        .check_esdt_balance(&borrower, STABLECOIN_TOKEN_ID, &rust_biguint!(51_501));
+
+    sa_setup
+        .b_mock
+        .execute_query(&sa_setup.sa_wrapper, |sc| {
+            assert_eq!(sc.lent_amount().get(), managed_biguint!(150_000));
+            assert_eq!(sc.borrowed_amount().get(), managed_biguint!(60_000));
+        })
+        .assert_ok();
+}

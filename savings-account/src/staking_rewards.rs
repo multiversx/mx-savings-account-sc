@@ -9,7 +9,6 @@ use crate::{
     staking_positions_mapper::StakingPositionsMapper,
 };
 
-const RECEIVE_STAKING_REWARDS_FUNC_NAME: &[u8] = b"receiveStakingRewards";
 const STAKING_REWARDS_CLAIM_GAS_PER_TOKEN: u64 = 10_000_000;
 
 mod dex_proxy {
@@ -36,11 +35,7 @@ mod delegation_proxy {
     pub trait Delegation {
         #[payable("*")]
         #[endpoint(claimRewards)]
-        fn claim_rewards(
-            &self,
-            #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>,
-            opt_receive_funds_func: OptionalValue<ManagedBuffer>,
-        );
+        fn claim_rewards(&self, #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>);
     }
 }
 
@@ -134,12 +129,7 @@ pub trait StakingRewardsModule:
 
         if !transfers.is_empty() {
             self.delegation_proxy(self.delegation_sc_address().get())
-                .claim_rewards(
-                    transfers,
-                    OptionalValue::Some(ManagedBuffer::new_from_bytes(
-                        RECEIVE_STAKING_REWARDS_FUNC_NAME,
-                    )),
-                )
+                .claim_rewards(transfers)
                 .async_call()
                 .with_callback(
                     <Self as StakingRewardsModule>::callbacks(self)
@@ -154,13 +144,12 @@ pub trait StakingRewardsModule:
     fn claim_staking_rewards_callback(
         &self,
         pos_ids: ManagedVec<u64>,
-        #[payment_multi] new_liquid_staking_tokens: ManagedVec<EsdtTokenPayment<Self::Api>>,
-        #[call_result] result: ManagedAsyncCallResult<MultiValueEncoded<u64>>,
+        #[call_result] result: ManagedAsyncCallResult<
+            MultiValue2<BigUint, ManagedVec<EsdtTokenPayment<Self::Api>>>,
+        >,
     ) -> OperationCompletionStatus {
         match result {
-            // "result" contains nonces created by "ESDTNFTCreate calls on callee contract"
-            // we don't need them, as we already have them in payment call data
-            ManagedAsyncCallResult::Ok(_) => {
+            ManagedAsyncCallResult::Ok(payments) => {
                 let last_pos_id = match self.load_operation() {
                     OngoingOperationType::ClaimStakingRewards {
                         pos_id,
@@ -178,6 +167,7 @@ pub trait StakingRewardsModule:
                     _ => sc_panic!("Invalid operation in callback"),
                 };
 
+                let (_reward_amount, new_liquid_staking_tokens) = payments.into_tuple();
                 require!(
                     new_liquid_staking_tokens.len() == pos_ids.len(),
                     "Invalid old and new liquid staking position lengths"
@@ -206,17 +196,6 @@ pub trait StakingRewardsModule:
             }
             ManagedAsyncCallResult::Err(_) => sc_panic!("Async call failed"),
         }
-    }
-
-    #[payable("*")]
-    #[endpoint(receiveStakingRewards)]
-    fn receive_staking_rewards(&self) {
-        let caller = self.blockchain().get_caller();
-        let delegation_sc_address = self.delegation_sc_address().get();
-        require!(
-            caller == delegation_sc_address,
-            "Only the Delegation SC may call this function"
-        );
     }
 
     // TODO: Convert EGLD to WrapedEgld first (DEX does not convert EGLD directly)

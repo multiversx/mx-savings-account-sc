@@ -18,7 +18,8 @@ pub trait DelegationMock {
 
     #[payable("EGLD")]
     #[endpoint]
-    fn stake(&self, #[payment_amount] payment_amount: BigUint) {
+    fn stake(&self) {
+        let payment_amount = self.call_value().egld_value();
         require!(payment_amount > 0, "Must pay more than 0 EGLD");
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
@@ -36,11 +37,9 @@ pub trait DelegationMock {
 
     #[payable("*")]
     #[endpoint(claimRewards)]
-    fn claim_rewards(
-        &self,
-        #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>,
-        opt_receive_funds_func: OptionalValue<ManagedBuffer>,
-    ) {
+    fn claim_rewards(&self) -> MultiValue2<BigUint, ManagedVec<EsdtTokenPayment<Self::Api>>> {
+        let payments: ManagedVec<EsdtTokenPayment<Self::Api>> =
+            self.call_value().all_esdt_transfers();
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
 
         let mut new_tokens = ManagedVec::new();
@@ -70,28 +69,10 @@ pub trait DelegationMock {
 
         let rewards_amount = total_amount / 10u32;
         let caller = self.blockchain().get_caller();
+        self.send().direct_egld(&caller, &rewards_amount, &[]);
+        self.send().direct_multi(&caller, &new_tokens, &[]);
 
-        match opt_receive_funds_func {
-            OptionalValue::None => {
-                self.send()
-                    .direct(&caller, &TokenIdentifier::egld(), 0, &rewards_amount, &[])
-            }
-            OptionalValue::Some(func_name) => {
-                let _ = Self::Api::send_api_impl().direct_egld_execute(
-                    &caller,
-                    &rewards_amount,
-                    self.blockchain().get_gas_left() / 4,
-                    &func_name,
-                    &ManagedArgBuffer::new_empty(),
-                );
-            }
-        }
-
-        self.send().transfer_multiple_esdt_via_async_call(
-            &caller,
-            &new_tokens,
-            ManagedBuffer::new(),
-        );
+        (rewards_amount, new_tokens).into()
     }
 
     fn create_liquid_staking_sft(&self, token_id: &TokenIdentifier, amount: &BigUint) -> u64 {

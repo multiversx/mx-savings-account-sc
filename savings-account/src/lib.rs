@@ -3,10 +3,10 @@
 elrond_wasm::imports!();
 
 pub mod common_storage;
-mod math;
-mod model;
-mod ongoing_operation;
-mod price_aggregator_proxy;
+pub mod math;
+pub mod model;
+pub mod ongoing_operation;
+pub mod price_aggregator_proxy;
 pub mod staking_positions_mapper;
 pub mod staking_rewards;
 pub mod tokens;
@@ -194,15 +194,16 @@ pub trait SavingsAccount:
 
         let borrow_token_mapper = self.borrow_token();
         let stablecoin_token_id = self.stablecoin_token_id().get();
+
+        borrow_token_mapper.require_same_token(&first_payment.token_identifier);
         require!(
-            first_payment.token_identifier == stablecoin_token_id,
+            second_payment.token_identifier == stablecoin_token_id,
             REPAY_INVALID_PAYMENTS_ERR_MSG,
         );
-        borrow_token_mapper.require_same_token(&second_payment.token_identifier);
 
-        let stablecoin_amount = &first_payment.amount;
-        let borrow_token_amount = &second_payment.amount;
-        let borrow_token_nonce = second_payment.token_nonce;
+        let borrow_token_amount = &first_payment.amount;
+        let borrow_token_nonce = first_payment.token_nonce;
+        let stablecoin_amount = &second_payment.amount;
 
         let borrowed_amount = self.borrowed_amount().get();
         let lent_amount = self.lent_amount().get();
