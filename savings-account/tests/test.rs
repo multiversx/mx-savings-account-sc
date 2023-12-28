@@ -1,7 +1,7 @@
 mod savings_account_interactions;
 mod savings_account_setup;
 
-use elrond_wasm_debug::{managed_biguint, rust_biguint, DebugApi};
+use multiversx_sc_scenario::{managed_biguint, rust_biguint, DebugApi};
 use savings_account::common_storage::CommonStorageModule;
 use savings_account::model::BorrowMetadata;
 use savings_account::staking_positions_mapper::StakingPosition;

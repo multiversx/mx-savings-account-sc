@@ -1,5 +1,5 @@
-elrond_wasm::imports!();
-elrond_wasm::derive_imports!();
+multiversx_sc::imports!();
+multiversx_sc::derive_imports!();
 
 const MIN_GAS_TO_SAVE_PROGRESS: u64 = 100_000_000;
 pub const NR_ROUNDS_WAIT_FOR_CALLBACK: u64 = 100; // If the callback isn't executed after 100 rounds, then we clear the state and retry
@@ -27,7 +27,7 @@ impl LoopOp {
     }
 }
 
-#[elrond_wasm::module]
+#[multiversx_sc::module]
 pub trait OngoingOperationModule {
     fn run_while_it_has_gas<Process>(
         &self,

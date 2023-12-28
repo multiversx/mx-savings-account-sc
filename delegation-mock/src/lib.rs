@@ -1,10 +1,10 @@
 #![no_std]
 
-use elrond_wasm::elrond_codec::Empty;
+use multiversx_sc::codec::Empty;
 
-elrond_wasm::imports!();
+multiversx_sc::imports!();
 
-#[elrond_wasm::contract]
+#[multiversx_sc::contract]
 pub trait DelegationMock {
     #[init]
     fn init(&self, liquid_staking_token_id: TokenIdentifier) {
@@ -19,19 +19,18 @@ pub trait DelegationMock {
     #[payable("EGLD")]
     #[endpoint]
     fn stake(&self) {
-        let payment_amount = self.call_value().egld_value();
+        let payment_amount = self.call_value().egld_value().clone_value();
         require!(payment_amount > 0, "Must pay more than 0 EGLD");
 
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         let sft_nonce = self.create_liquid_staking_sft(&liquid_staking_token_id, &payment_amount);
 
         let caller = self.blockchain().get_caller();
-        self.send().direct(
+        self.send().direct_esdt(
             &caller,
             &liquid_staking_token_id,
             sft_nonce,
             &payment_amount,
-            &[],
         );
     }
 
@@ -39,7 +38,7 @@ pub trait DelegationMock {
     #[endpoint(claimRewards)]
     fn claim_rewards(&self) -> MultiValue2<BigUint, ManagedVec<EsdtTokenPayment<Self::Api>>> {
         let payments: ManagedVec<EsdtTokenPayment<Self::Api>> =
-            self.call_value().all_esdt_transfers();
+            self.call_value().all_esdt_transfers().clone_value();
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
 
         let mut new_tokens = ManagedVec::new();
@@ -59,18 +58,17 @@ pub trait DelegationMock {
                 self.create_liquid_staking_sft(&liquid_staking_token_id, &payment.amount);
 
             total_amount += &payment.amount;
-            new_tokens.push(EsdtTokenPayment {
-                token_identifier: payment.token_identifier,
-                token_nonce: new_nonce,
-                amount: payment.amount,
-                token_type: EsdtTokenType::SemiFungible,
-            })
+            new_tokens.push(EsdtTokenPayment::new(
+                payment.token_identifier,
+                new_nonce,
+                payment.amount,
+            ))
         }
 
         let rewards_amount = total_amount / 10u32;
         let caller = self.blockchain().get_caller();
-        self.send().direct_egld(&caller, &rewards_amount, &[]);
-        self.send().direct_multi(&caller, &new_tokens, &[]);
+        self.send().direct_egld(&caller, &rewards_amount);
+        self.send().direct_multi(&caller, &new_tokens);
 
         (rewards_amount, new_tokens).into()
     }

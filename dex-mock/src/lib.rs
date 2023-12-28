@@ -1,11 +1,12 @@
 #![no_std]
 
-elrond_wasm::imports!();
-elrond_wasm::derive_imports!();
+
+multiversx_sc::imports!();
+multiversx_sc::derive_imports!();
 
 const EGLD_DECIMALS: u64 = 1_000_000_000_000_000_000;
 
-#[elrond_wasm::contract]
+#[multiversx_sc::contract]
 pub trait DexMock {
     #[init]
     fn init(&self) {}
@@ -18,12 +19,12 @@ pub trait DexMock {
     #[endpoint(swapTokensFixedInput)]
     fn swap_tokens_fixed_input(
         &self,
-        #[payment_token] _token_in: TokenIdentifier,
+        #[payment_token] _token_in: EgldOrEsdtTokenIdentifier,
         #[payment_amount] amount_in: BigUint,
-        token_out: TokenIdentifier,
+        token_out: EgldOrEsdtTokenIdentifier,
         _amount_out_min: BigUint,
         opt_accept_funds_func: OptionalValue<ManagedBuffer>,
-    ) -> EsdtTokenPayment<Self::Api> {
+    ) -> EgldOrEsdtTokenPayment<Self::Api> {
         let caller = self.blockchain().get_caller();
         let amount_out = amount_in * 100u64 / EGLD_DECIMALS;
         let func = match opt_accept_funds_func {
@@ -31,20 +32,16 @@ pub trait DexMock {
             OptionalValue::None => ManagedBuffer::default(),
         };
 
-        let _ = Self::Api::send_api_impl().direct_esdt_execute(
+        let _ = self.send().direct_with_gas_limit(
             &caller,
-            &token_out,
+            &token_out.clone(),
+            0,
             &amount_out,
             self.blockchain().get_gas_left(),
-            &func,
-            &ManagedArgBuffer::new_empty(),
+            func,
+            &[],
         );
 
-        EsdtTokenPayment {
-            token_identifier: token_out,
-            token_nonce: 0,
-            amount: amount_out,
-            token_type: EsdtTokenType::Fungible,
-        }
+        EgldOrEsdtTokenPayment::new(token_out, 0, amount_out)
     }
 }

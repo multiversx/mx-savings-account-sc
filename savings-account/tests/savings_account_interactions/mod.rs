@@ -3,8 +3,8 @@ use crate::savings_account_setup::{
     NR_STAKING_POSITIONS, STABLECOIN_TOKEN_ID,
 };
 use elrond_wasm::{elrond_codec::multi_types::OptionalValue, types::Address};
-use elrond_wasm_debug::tx_mock::TxInputESDT;
-use elrond_wasm_debug::{
+use multiversx_sc_scenario::tx_mock::TxInputESDT;
+use multiversx_sc_scenario::{
     managed_biguint, managed_token_id, rust_biguint, tx_mock::TxResult, DebugApi,
 };
 use savings_account::common_storage::CommonStorageModule;

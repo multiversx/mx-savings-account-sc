@@ -1,10 +1,10 @@
-elrond_wasm::imports!();
+multiversx_sc::imports!();
 
 pub const BASE_PRECISION: u32 = 1_000_000_000; // Could be reduced maybe? Since we're working with epochs instead of seconds
 pub const DEFAULT_DECIMALS: u64 = 1_000_000_000_000_000_000; // most tokens have 10^18 decimals. TODO: Add as configurable value
 const EPOCHS_IN_YEAR: u32 = 365;
 
-#[elrond_wasm::module]
+#[multiversx_sc::module]
 pub trait MathModule {
     fn compute_borrow_rate(
         &self,

@@ -1,6 +1,6 @@
 #![no_std]
 
-elrond_wasm::imports!();
+multiversx_sc::imports!();
 
 pub mod common_storage;
 pub mod math;
@@ -19,7 +19,7 @@ static REPAY_INVALID_PAYMENTS_ERR_MSG: &[u8] =
     b"Must send exactly 2 types of tokens: Borrow SFTs and Stablecoins";
 static NO_REWARDS_ERR_MSG: &[u8] = b"No rewards to claim";
 
-#[elrond_wasm::contract]
+#[multiversx_sc::contract]
 pub trait SavingsAccount:
     math::MathModule
     + ongoing_operation::OngoingOperationModule
@@ -34,7 +34,7 @@ pub trait SavingsAccount:
         &self,
         stablecoin_token_id: TokenIdentifier,
         liquid_staking_token_id: TokenIdentifier,
-        staked_token_id: TokenIdentifier,
+        staked_token_id: EgldOrEsdtTokenIdentifier,
         staked_token_ticker: ManagedBuffer,
         delegation_sc_address: ManagedAddress,
         dex_swap_sc_address: ManagedAddress,
@@ -55,7 +55,7 @@ pub trait SavingsAccount:
             "Invalid liquid staking token ID"
         );
         require!(
-            staked_token_id.is_egld() || staked_token_id.is_valid_esdt_identifier(),
+            staked_token_id.is_egld() || staked_token_id.is_valid(),
             "Invalid staked token ID"
         );
         require!(
@@ -109,7 +109,7 @@ pub trait SavingsAccount:
 
         self.update_global_lender_rewards();
 
-        let (payment_amount, payment_token) = self.call_value().payment_token_pair();
+        let (payment_token, payment_amount) = self.call_value().single_fungible_esdt();
         let stablecoin_token_id = self.stablecoin_token_id().get();
         require!(
             payment_token == stablecoin_token_id,
@@ -134,7 +134,7 @@ pub trait SavingsAccount:
     fn borrow(&self) -> BorrowResultType<Self::Api> {
         self.require_no_ongoing_operation();
 
-        let payment: EsdtTokenPayment<Self::Api> = self.call_value().payment();
+        let payment: EsdtTokenPayment<Self::Api> = self.call_value().single_esdt();
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
         require!(
             payment.token_identifier == liquid_staking_token_id,
@@ -270,19 +270,18 @@ pub trait SavingsAccount:
 
         let liquid_staking_tokens_for_nonce = self
             .blockchain()
-            .get_sc_balance(&liquid_staking_token_id, liquid_staking_nonce);
+            .get_sc_balance(&EgldOrEsdtTokenIdentifier::esdt(liquid_staking_token_id.clone()), liquid_staking_nonce);
 
         // no tokens left after transfer, so we clear the entry
         if &liquid_staking_tokens_for_nonce == borrow_token_amount {
             staking_positions_mapper.remove_staking_position(borrow_metadata.staking_position_id);
         }
 
-        self.send().direct(
+        self.send().direct_esdt(
             &caller,
             &liquid_staking_token_id,
             liquid_staking_nonce,
             borrow_token_amount,
-            &[],
         );
 
         let liquid_staking_payment = EsdtTokenPayment::new(
@@ -303,7 +302,7 @@ pub trait SavingsAccount:
 
         self.update_global_lender_rewards();
 
-        let payment: EsdtTokenPayment<Self::Api> = self.call_value().payment();
+        let payment: EsdtTokenPayment<Self::Api> = self.call_value().single_esdt();
         let lend_token_mapper = self.lend_token();
         lend_token_mapper.require_same_token(&payment.token_identifier);
 
@@ -343,7 +342,7 @@ pub trait SavingsAccount:
 
         self.update_global_lender_rewards();
 
-        let payment: EsdtTokenPayment<Self::Api> = self.call_value().payment();
+        let payment: EsdtTokenPayment<Self::Api> = self.call_value().single_esdt();
         let lend_token_mapper = self.lend_token();
         lend_token_mapper.require_same_token(&payment.token_identifier);
 
@@ -473,7 +472,7 @@ pub trait SavingsAccount:
         let liquid_staking_token_id = self.liquid_staking_token_id().get();
 
         self.blockchain()
-            .get_sc_balance(&liquid_staking_token_id, liquid_staking_token_nonce)
+            .get_sc_balance(&EgldOrEsdtTokenIdentifier::esdt(liquid_staking_token_id), liquid_staking_token_nonce)
     }
 
     #[storage_mapper("poolParams")]

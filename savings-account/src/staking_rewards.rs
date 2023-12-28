@@ -1,5 +1,5 @@
-elrond_wasm::imports!();
-elrond_wasm::derive_imports!();
+multiversx_sc::imports!();
+multiversx_sc::derive_imports!();
 
 use crate::{
     math::DEFAULT_DECIMALS,
@@ -12,30 +12,30 @@ use crate::{
 const STAKING_REWARDS_CLAIM_GAS_PER_TOKEN: u64 = 10_000_000;
 
 mod dex_proxy {
-    elrond_wasm::imports!();
+    multiversx_sc::imports!();
 
-    #[elrond_wasm::proxy]
+    #[multiversx_sc::proxy]
     pub trait Dex {
         #[payable("*")]
         #[endpoint(swapTokensFixedInput)]
         fn swap_tokens_fixed_input(
             &self,
-            #[payment_token] token_in: TokenIdentifier,
+            #[payment_token] token_in: EgldOrEsdtTokenIdentifier,
             #[payment_amount] amount_in: BigUint,
-            token_out: TokenIdentifier,
+            token_out: EgldOrEsdtTokenIdentifier,
             amount_out_min: BigUint,
         ) -> EsdtTokenPayment<Self::Api>;
     }
 }
 
 mod delegation_proxy {
-    elrond_wasm::imports!();
+    multiversx_sc::imports!();
 
-    #[elrond_wasm::proxy]
+    #[multiversx_sc::proxy]
     pub trait Delegation {
         #[payable("*")]
         #[endpoint(claimRewards)]
-        fn claim_rewards(&self, #[payment_multi] payments: ManagedVec<EsdtTokenPayment<Self::Api>>);
+        fn claim_rewards(&self, payments: ManagedVec<EsdtTokenPayment<Self::Api>>);
     }
 }
 
@@ -46,7 +46,7 @@ pub struct StakingPosition {
     pub liquid_staking_nonce: u64,
 }
 
-#[elrond_wasm::module]
+#[multiversx_sc::module]
 pub trait StakingRewardsModule:
     crate::math::MathModule
     + crate::ongoing_operation::OngoingOperationModule
@@ -95,15 +95,15 @@ pub trait StakingRewardsModule:
             || {
                 let current_staking_pos = staking_positions_mapper.get_staking_position(pos_id);
                 let sft_nonce = current_staking_pos.liquid_staking_nonce;
+                let amount = self
+                    .blockchain()
+                    .get_sc_balance(&EgldOrEsdtTokenIdentifier::esdt(liquid_staking_token_id.clone()), sft_nonce);
 
-                transfers.push(EsdtTokenPayment {
-                    token_identifier: liquid_staking_token_id.clone(),
-                    token_nonce: sft_nonce,
-                    amount: self
-                        .blockchain()
-                        .get_sc_balance(&liquid_staking_token_id, sft_nonce),
-                    token_type: EsdtTokenType::SemiFungible,
-                });
+                transfers.push(EsdtTokenPayment::new(
+                    liquid_staking_token_id.clone(),
+                    sft_nonce,
+                    amount,
+                ));
                 callback_pos_ids.push(pos_id);
 
                 if current_staking_pos.next_pos_id == 0 {
