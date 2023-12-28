@@ -1,5 +1,5 @@
-elrond_wasm::imports!();
-elrond_wasm::derive_imports!();
+multiversx_sc::imports!();
+multiversx_sc::derive_imports!();
 
 pub type LendResultType<M> = EsdtTokenPayment<M>;
 pub type BorrowResultType<M> = MultiValue2<EsdtTokenPayment<M>, EsdtTokenPayment<M>>;

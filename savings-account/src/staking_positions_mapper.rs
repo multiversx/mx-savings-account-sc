@@ -1,8 +1,8 @@
-elrond_wasm::imports!();
-elrond_wasm::derive_imports!();
+multiversx_sc::imports!();
+multiversx_sc::derive_imports!();
 
 use core::marker::PhantomData;
-use elrond_wasm::{
+use multiversx_sc::{
     api::StorageMapperApi,
     storage::{mappers::StorageMapper, StorageKey},
     storage_clear, storage_get, storage_get_len, storage_set,

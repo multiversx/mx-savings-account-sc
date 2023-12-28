@@ -2,7 +2,7 @@ use delegation_mock::DelegationMock;
 use elrond_wasm::elrond_codec::Empty;
 use elrond_wasm::storage::mappers::StorageTokenWrapper;
 use elrond_wasm::types::{Address, EsdtLocalRole, ManagedBuffer, ManagedVec, TokenIdentifier};
-use elrond_wasm_debug::{
+use multiversx_sc_scenario::{
     managed_address, managed_biguint, managed_buffer, managed_token_id, rust_biguint,
     testing_framework::*, DebugApi,
 };
@@ -202,7 +202,7 @@ where
         b_mock
             .execute_tx(owner_address, &price_aggregator_wrapper, &rust_zero, |sc| {
                 sc.init(
-                    TokenIdentifier::egld(),
+                    EgldOrEsdtTokenIdentifier::egld(),
                     ManagedVec::from_single_item(managed_address!(&oracle)),
                     1,
                     0,

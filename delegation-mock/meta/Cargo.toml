@@ -1,15 +1,13 @@
 [package]
 name = "delegation-mock-meta"
 version = "0.0.0"
-authors = [ "Dorin Iancu <dorin.iancu@elrond.com>",]
+authors = ["Dorin Iancu <dorin.iancu@elrond.com>"]
 edition = "2018"
 publish = false
 
 [dependencies.delegation-mock]
 path = ".."
 
-[dependencies.elrond-wasm]
-version = "0.31.1"
-
-[dependencies.elrond-wasm-debug]
-version = "0.31.1"
+[dependencies.multiversx-sc-meta]
+version = "0.45.2"
+default-features = false

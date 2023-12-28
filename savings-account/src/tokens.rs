@@ -1,14 +1,14 @@
 use crate::model::LendMetadata;
 
-elrond_wasm::imports!();
-elrond_wasm::derive_imports!();
+multiversx_sc::imports!();
+multiversx_sc::derive_imports!();
 
 static LEND_TOKEN_TICKER: &[u8] = b"LEND";
 static BORROW_TOKEN_TICKER: &[u8] = b"BORROW";
 static TOKEN_ALREADY_ISSUED_ERR_MSG: &[u8] = b"Token already issued";
 const INITIAL_SFT_AMOUNT: u32 = 1;
 
-#[elrond_wasm::module]
+#[multiversx_sc::module]
 pub trait TokensModule {
     #[only_owner]
     #[payable("EGLD")]
@@ -16,7 +16,7 @@ pub trait TokensModule {
     fn issue_lend_token(&self, token_name: ManagedBuffer, num_decimals: usize) {
         require!(self.lend_token().is_empty(), TOKEN_ALREADY_ISSUED_ERR_MSG);
 
-        let payment_amount = self.call_value().egld_value();
+        let payment_amount = self.call_value().egld_value().clone_value();
         self.issue_token(
             payment_amount,
             token_name,
@@ -32,7 +32,7 @@ pub trait TokensModule {
     fn issue_borrow_token(&self, token_name: ManagedBuffer, num_decimals: usize) {
         require!(self.borrow_token().is_empty(), TOKEN_ALREADY_ISSUED_ERR_MSG);
 
-        let payment_amount = self.call_value().egld_value();
+        let payment_amount = self.call_value().egld_value().clone_value();
         self.issue_token(
             payment_amount,
             token_name,
@@ -68,7 +68,7 @@ pub trait TokensModule {
     ) -> EsdtTokenPayment<Self::Api> {
         let stablecoin_token_id = self.stablecoin_token_id().get();
         self.send()
-            .direct(to, &stablecoin_token_id, 0, &amount, &[]);
+            .direct_esdt(to, &stablecoin_token_id, 0, &amount);
 
         EsdtTokenPayment::new(stablecoin_token_id, 0, amount)
     }
@@ -99,9 +99,9 @@ pub trait TokensModule {
         match result {
             ManagedAsyncCallResult::Ok(token_id) => {
                 if token_ticker == ManagedBuffer::new_from_bytes(LEND_TOKEN_TICKER) {
-                    self.lend_token().set_token_id(&token_id);
+                    self.lend_token().set_token_id(token_id);
                 } else if token_ticker == ManagedBuffer::new_from_bytes(BORROW_TOKEN_TICKER) {
-                    self.borrow_token().set_token_id(&token_id);
+                    self.borrow_token().set_token_id(token_id);
                 } else {
                     self.issue_callback_refund();
                 }
@@ -114,11 +114,10 @@ pub trait TokensModule {
 
     fn issue_callback_refund(&self) {
         let caller = self.blockchain().get_owner_address();
-        let (returned_tokens, token_id) = self.call_value().payment_token_pair();
+        let returned_tokens = self.call_value().egld_value().clone_value();
 
-        if token_id.is_egld() && returned_tokens > 0 {
-            self.send()
-                .direct(&caller, &token_id, 0, &returned_tokens, &[]);
+        if returned_tokens > 0 {
+            self.send().direct_egld(&caller, &returned_tokens);
         }
     }
 
@@ -134,7 +133,7 @@ pub trait TokensModule {
 
     #[view(getStakedTokenId)]
     #[storage_mapper("stakedTokenId")]
-    fn staked_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
+    fn staked_token_id(&self) -> SingleValueMapper<EgldOrEsdtTokenIdentifier>;
 
     #[storage_mapper("stakedTokenTicker")]
     fn staked_token_ticker(&self) -> SingleValueMapper<ManagedBuffer>;
